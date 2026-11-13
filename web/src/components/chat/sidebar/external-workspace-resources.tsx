@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Cable, PlugZap, Unlink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,11 +18,8 @@ import {
   projectsApi,
   projectsQueryKey,
   type ProjectSummary,
-  type ProjectWorkspaceCopySummary,
   type ProjectWorkspaceResourceSummary,
 } from '@/lib/projects-api';
-import { WorkspaceTransfers } from './workspace-transfers';
-import { GitCopyDelete } from '../git-copy-delete';
 import { GitConnectionEdit } from './git-connection-edit';
 import {
   getProjectLocations,
@@ -55,13 +52,13 @@ export function ExternalWorkspaceResources({
     nsMode: 'fallback',
   });
   const queryClient = useQueryClient();
-  const [resources, setResources] = useState<ProjectWorkspaceResourceSummary[]>(
-    [],
-  );
-  const [copies, setCopies] = useState<ProjectWorkspaceCopySummary[]>([]);
-  const [copying, setCopying] = useState<string | null>(null);
-  const [copyBranch, setCopyBranch] = useState('');
-  const [removedCopyPath, setRemovedCopyPath] = useState('');
+  const inventory = useQuery({
+    queryKey: ['project-locations', project.id],
+    queryFn: ({ signal }) => getProjectLocations(project.id, signal),
+  });
+  const resources = inventory.data
+    ? connectionResourceViews(inventory.data)
+    : [];
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -69,28 +66,22 @@ export function ExternalWorkspaceResources({
   const [detaching, setDetaching] =
     useState<ProjectWorkspaceResourceSummary | null>(null);
   const detachTrigger = useRef<HTMLButtonElement | null>(null);
-  const load = useCallback(async () => {
-    try {
-      const result = await getProjectLocations(project.id);
-      setResources(connectionResourceViews(result));
-      setCopies(result.copies);
-      setError('');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, [project.id]);
-  useEffect(() => {
-    // Network completion updates the resource inventory for the opened project.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-  }, [load]);
+  const load = async () => {
+    const result = await inventory.refetch();
+    if (result.error) throw result.error;
+  };
   const mutate = async (path: string, init: RequestInit) => {
     setBusy(true);
     setError('');
     try {
       await projectsApi(path, init);
       await load();
-      await queryClient.invalidateQueries({ queryKey: projectsQueryKey });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: projectsQueryKey }),
+        queryClient.invalidateQueries({
+          queryKey: ['project-locations', project.id],
+        }),
+      ]);
       return true;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -126,9 +117,7 @@ export function ExternalWorkspaceResources({
   };
   const field =
     'rounded-md border border-input bg-background px-3 py-2 text-sm';
-  const stateLabel = (
-    state: ProjectWorkspaceResourceSummary['connectionState'],
-  ) => {
+  const stateLabel = (state: (typeof resources)[number]['connectionState']) => {
     switch (state) {
       case 'local':
         return t('localResource');
@@ -269,9 +258,16 @@ export function ExternalWorkspaceResources({
           <div className="flex flex-wrap items-center gap-3">
             <PlugZap className="h-4 w-4 text-muted-foreground" />
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 text-sm font-medium">
+              <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
                 <span className="truncate">{resource.name}</span>
                 <Badge variant="secondary">{resource.type.toUpperCase()}</Badge>
+                <Badge variant="outline">
+                  {t(
+                    resource.agentEnabled
+                      ? 'agentAccessEnabled'
+                      : 'agentAccessDisabled',
+                  )}
+                </Badge>
                 <Badge
                   variant={
                     resource.connectionState === 'connected'
@@ -293,7 +289,7 @@ export function ExternalWorkspaceResources({
               )}
             </div>
             <div className="ml-auto flex w-full flex-wrap justify-end gap-1 sm:w-auto">
-              {resource.type === 'git' && (
+              {resource.type !== 'local' && (
                 <GitConnectionEdit
                   projectId={project.id}
                   resource={resource}
@@ -314,19 +310,6 @@ export function ExternalWorkspaceResources({
               >
                 {t('test')}
               </Button>
-              {resource.type === 'git' && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={busy || !resource.enabled}
-                  onClick={() => {
-                    setCopying(copying === resource.id ? null : resource.id);
-                    setCopyBranch('');
-                  }}
-                >
-                  {t('createWorkingCopy')}
-                </Button>
-              )}
               <Button
                 size="sm"
                 variant="ghost"
@@ -356,76 +339,18 @@ export function ExternalWorkspaceResources({
               </Button>
             </div>
           </div>
-          {copying === resource.id && (
-            <div className="flex items-center gap-2 border-t border-border pt-2">
-              <input
-                className={`${field} min-w-0 flex-1`}
-                placeholder={t('gitBranchOptional')}
-                value={copyBranch}
-                onChange={(event) => setCopyBranch(event.target.value)}
-              />
-              <Button
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  void mutate(
-                    `${projectConnectionsPath(project.id)}/${resource.id}/copies`,
-                    {
-                      method: 'POST',
-                      body: JSON.stringify({ branch: copyBranch || undefined }),
-                    },
-                  ).then((created) => created && setCopying(null))
-                }
-              >
-                {t('createCopy')}
-              </Button>
-            </div>
-          )}
-          {copies
-            .filter((copy) => copy.sourceResourceId === resource.id)
-            .map((copy) => (
-              <div
-                key={copy.id}
-                className="ml-7 flex items-center gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium">{copy.name}</div>
-                  <div className="truncate font-mono text-muted-foreground">
-                    {copy.branch ?? t('detachedRevision')} ·{' '}
-                    {copy.revision.slice(0, 12) || t('gitNoCommit')} ·{' '}
-                    {copy.accessMode === 'read_only'
-                      ? t('readOnly')
-                      : t('readAndWrite')}
-                  </div>
-                </div>
-                <Badge
-                  variant={copy.state === 'ready' ? 'secondary' : 'destructive'}
-                >
-                  {copy.state === 'ready' ? t('ready') : t('revoked')}
-                </Badge>
-                <GitCopyDelete
-                  projectId={project.id}
-                  copy={copy}
-                  onRemoved={(path) => {
-                    setRemovedCopyPath(path);
-                    void load();
-                  }}
-                />
-              </div>
-            ))}
         </div>
       ))}
-      {removedCopyPath && (
-        <p role="status" className="break-all text-xs">
-          {t('gitCopyRecovery', { path: removedCopyPath })}
-        </p>
-      )}
       {resources.length === 0 && !editing && (
         <p className="text-xs italic text-muted-foreground">
           {t('noExternalResource')}
         </p>
       )}
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {(error || inventory.error) && (
+        <p className="text-xs text-destructive">
+          {error || inventory.error?.message}
+        </p>
+      )}
       <AlertDialog
         open={detaching !== null}
         onOpenChange={(open) => {
@@ -472,7 +397,6 @@ export function ExternalWorkspaceResources({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <WorkspaceTransfers project={project} />
     </div>
   );
 }

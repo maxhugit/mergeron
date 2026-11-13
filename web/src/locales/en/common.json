@@ -1685,5 +1685,6 @@
   "agentElapsedInterrupted": "Interrupted",
   "agentElapsedFailed": "Failed",
   "technicalActivityGroup_one": "Technical activity · {{count}} operation",
-  "technicalActivityGroup_other": "Technical activity · {{count}} operations"
+  "technicalActivityGroup_other": "Technical activity · {{count}} operations",
+  "projectLocationsTab": "Locations"
 }

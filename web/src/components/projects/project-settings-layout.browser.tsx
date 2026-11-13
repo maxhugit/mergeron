@@ -207,6 +207,8 @@ vi.mock('@/lib/projects-api', () => ({
         },
         viewer: { enabled: true },
       };
+    if (path.endsWith('/location-transfers'))
+      return { transfers: [], runs: [] };
     if (path.endsWith('/locations'))
       return {
         modelVersion: 1,
@@ -224,6 +226,29 @@ vi.mock('@/lib/projects-api', () => ({
           },
         ],
         locations: [
+          ...[
+            {
+              id: 'main',
+              name: 'Principal',
+              path: '/workspaces/p',
+              kind: 'managed_local',
+            },
+            {
+              id: 'secondary',
+              name: 'Secondaire',
+              path: '/workspaces/secondary',
+              kind: 'attached_local',
+            },
+          ].map((w) => ({
+            ...w,
+            id: 'local:' + w.id,
+            projectId: 'p',
+            localWorkspaceId: w.id,
+            connectionId: null,
+            workingCopyId: null,
+            accessMode: 'read_write',
+            capabilities: { read: true, write: true, execute: false },
+          })),
           {
             id: 'l',
             projectId: 'p',
@@ -285,7 +310,8 @@ afterEach(() => {
   client.clear();
   document.documentElement.classList.remove('dark');
 });
-const label = (key: string) => i18n.t(translationKey(key));
+const label = (key: string) =>
+  i18n.t(translationKey(key), { ns: ['workspaces', 'common'] });
 async function tab(key: string) {
   await page.getByRole('tab', { name: label(key), exact: true }).click();
 }
@@ -454,22 +480,54 @@ for (const width of [320, 390, 1100])
     );
     inspect(width);
     await tab('workspacesLabel');
+    const resourcesNavigation = screen.getByRole('tablist', {
+      name: label('manageWorkspaces'),
+    });
+    expect(
+      Array.from(resourcesNavigation.querySelectorAll('[role=tab]')).map(
+        (t) => t.textContent,
+      ),
+    ).toEqual([
+      label('externalResources'),
+      label('projectLocationsTab'),
+      label('workspaceTransfers'),
+      label('gitDeliverablesTitle'),
+    ]);
+    await tab('projectLocationsTab');
     await expect
       .element(page.getByText('/workspaces/secondary', { exact: true }))
       .toBeVisible();
     expect(screen.getByRole('button', { name: label('detach') })).toBeVisible();
     inspect(width);
     await page
-      .getByRole('button', { name: label('addAWorkspace'), exact: true })
+      .getByRole('button', { name: label('addLocalLocation'), exact: true })
       .click();
     expect(screen.getByRole('dialog')).toBeVisible();
-    expect(
-      screen.getAllByRole('button', { name: /SSH/ }).length,
-    ).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /^SSH/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: label('cancel') }));
     await tab('externalResources');
     await expect
       .element(page.getByText('Dépôt de contrôle', { exact: true }))
+      .toBeVisible();
+    inspect(width);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/project-connections-${width}.png`,
+    });
+    await page
+      .getByRole('button', { name: label('addAConnection'), exact: true })
+      .click();
+    await page.getByRole('button', { name: /^SSH/ }).click();
+    await expect
+      .element(
+        page.getByRole('checkbox', {
+          name: label('connectionAvailableToAgent'),
+        }),
+      )
+      .toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: label('cancel') }));
+    await tab('workspaceTransfers');
+    await expect
+      .element(page.getByRole('heading', { name: label('workspaceTransfers') }))
       .toBeVisible();
     inspect(width);
     await page

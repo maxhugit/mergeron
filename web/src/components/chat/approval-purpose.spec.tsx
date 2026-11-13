@@ -55,6 +55,8 @@ it('warns about loss of merge resolution edits and does not invent missing argum
   const view = render(<ApprovalPurpose request={request('abort_merge')} />);
   expect(await screen.findByText(/will be lost/)).toBeVisible();
   view.rerender(<ApprovalPurpose request={request('commit', null)} />);
-  expect(await screen.findByText(/complete arguments are not available/)).toBeVisible();
+  expect(
+    await screen.findByText(/complete arguments are not available/),
+  ).toBeVisible();
   expect(screen.queryByText(/Create a local commit/)).toBeNull();
 });

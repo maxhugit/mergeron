@@ -148,6 +148,8 @@ describe('locations/connections expand migration', () => {
       .prepare('SELECT * FROM project_workspace_secrets WHERE resource_id=?')
       .get(resource.id);
     apply();
+    // The current service reads the latest schema; keep the expand/rollback cases pinned above.
+    migrate(drizzle(sqlite), { migrationsFolder: 'drizzle' });
     expect(resources.resolveForTransfer('p', resource.id).secret).toEqual({
       username: 'existing-user',
       password: 'existing-test-password',

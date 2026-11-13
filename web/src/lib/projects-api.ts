@@ -162,6 +162,7 @@ export interface ProjectWorkspaceSummary {
 }
 
 export interface ProjectWorkspaceResourceSummary {
+  agentEnabled?: boolean;
   id: string;
   projectId: string;
   localWorkspaceId: string | null;

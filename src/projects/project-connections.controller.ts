@@ -33,10 +33,10 @@ export class ProjectConnectionsController {
     const resource = this.resources.create(projectId, {
       ...body,
       type: body.protocol ?? body.type,
+      connectionOnly: true,
     });
     return {
       connection: this.locations.connection(projectId, resource.id),
-      location: this.locations.location(projectId, `remote:${resource.id}`),
     };
   }
 

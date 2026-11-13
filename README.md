@@ -36,6 +36,7 @@ déploiement manuel ou Compose n’est nécessaire.
 - livrables et documents versionnés ;
 - explorateurs de fichiers et terminaux ;
 - dépôts Git, préparation des commits, branches et pull requests ;
+- connexions de projet indépendantes des dossiers, accès SSH/SFTP/FTPS/FTP explicitement disponibles aux agents ;
 - environnements de test isolés et vérification visuelle ;
 - navigation web distante ou via une extension locale ;
 - intégrations facultatives aux services autorisés ;

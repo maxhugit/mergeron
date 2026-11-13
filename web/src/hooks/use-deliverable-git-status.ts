@@ -74,7 +74,7 @@ export function useDeliverableGitStatus(
     staleTime: 0,
     refetchInterval: (query) => {
       if (!query.state.data || query.state.status === 'error') return false;
-      return ['pending', 'syncing', 'checking'].includes(
+      return ['pending', 'waiting', 'syncing', 'checking'].includes(
         deliverableGitState(query.state.data, selectedId),
       )
         ? 2500

@@ -17,6 +17,7 @@ import { Socket } from 'node:net';
 import { connect as connectTls } from 'node:tls';
 import { spawn } from 'node:child_process';
 import { and, eq } from 'drizzle-orm';
+import { posix } from 'node:path';
 import { gitCredentialHelper } from './git-credentials';
 import {
   requireExecutionAccess,
@@ -123,6 +124,19 @@ export class WorkspaceResourcesService {
         .run();
       const secret = this.secretInput(input.secret);
       if (secret) this.storeSecret(tx, id, secret, now);
+      tx.update(projectConnections)
+        .set({
+          agentEnabled:
+            input.agentEnabled === true ||
+            (type === 'git' && input.agentEnabled === undefined),
+        })
+        .where(eq(projectConnections.id, id))
+        .run();
+      if (input.connectionOnly === true)
+        tx.update(projectLocations)
+          .set({ declared: false })
+          .where(eq(projectLocations.legacyResourceId, id))
+          .run();
     });
     return this.get(projectId, id);
   }
@@ -190,6 +204,11 @@ export class WorkspaceResourcesService {
         const secret = this.secretInput(input.secret);
         if (secret) this.storeSecret(tx, id, secret, now);
       }
+      if (typeof input.agentEnabled === 'boolean')
+        tx.update(projectConnections)
+          .set({ agentEnabled: input.agentEnabled })
+          .where(eq(projectConnections.id, id))
+          .run();
     });
     return this.get(projectId, id);
   }
@@ -250,6 +269,22 @@ export class WorkspaceResourcesService {
     if (resource.type === 'local')
       throw new ConflictException('Detach the corresponding workspace instead');
     this.db.transaction((tx) => {
+      // Remote folders have their own path adapter, sharing the parent credentials.
+      const children = tx
+        .select()
+        .from(projectLocations)
+        .where(
+          and(
+            eq(projectLocations.projectId, projectId),
+            eq(projectLocations.connectionId, id),
+          ),
+        )
+        .all();
+      for (const child of children)
+        if (child.legacyResourceId && child.legacyResourceId !== id)
+          tx.delete(projectWorkspaceResources)
+            .where(eq(projectWorkspaceResources.id, child.legacyResourceId))
+            .run();
       tx.update(projectWorkspaceCopies)
         .set({ state: 'revoked', updatedAt: Date.now() })
         .where(eq(projectWorkspaceCopies.sourceResourceId, id))
@@ -315,7 +350,17 @@ export class WorkspaceResourcesService {
   /** Server-only transfer material. Never expose this result from a controller. */
   resolveForTransfer(projectId: string, id: string) {
     const resource = this.raw(projectId, id);
-    return { resource, secret: this.readSecret(id) };
+    const scope = this.db
+      .select()
+      .from(projectLocations)
+      .where(
+        and(
+          eq(projectLocations.projectId, projectId),
+          eq(projectLocations.legacyResourceId, id),
+        ),
+      )
+      .get();
+    return { resource, secret: this.readSecret(scope?.connectionId ?? id) };
   }
 
   private raw(projectId: string, id: string): ProjectWorkspaceResource {
@@ -388,14 +433,42 @@ export class WorkspaceResourcesService {
       throw new ConflictException(
         'Project connection or location is unresolved',
       );
+    const scope =
+      location.connectionId === resource.id
+        ? location
+        : this.db
+            .select()
+            .from(projectLocations)
+            .where(
+              and(
+                eq(projectLocations.projectId, resource.projectId),
+                eq(projectLocations.legacyResourceId, connection.id),
+              ),
+            )
+            .get();
+    if (!scope)
+      throw new ConflictException('Connection file scope is unavailable');
+    const base = posix.resolve('/', scope.path),
+      target = posix.resolve('/', location.path);
+    if (target !== base && !target.startsWith(base === '/' ? '/' : base + '/'))
+      throw new ConflictException(
+        'Location is outside the allowed connection root',
+      );
     return {
       ...resource,
       name: location.name,
       type: connection.protocol,
       address: connection.address,
       rootPath: location.path,
-      accessMode: location.accessMode,
-      capabilities: location.capabilities,
+      accessMode:
+        location.accessMode === 'read_only' || scope.accessMode === 'read_only'
+          ? 'read_only'
+          : 'read_write',
+      capabilities: {
+        read: location.capabilities.read && scope.capabilities.read,
+        write: location.capabilities.write && scope.capabilities.write,
+        execute: false,
+      },
       enabled: connection.enabled,
       connectionState: connection.connectionState,
       lastCheckedAt: connection.lastCheckedAt,

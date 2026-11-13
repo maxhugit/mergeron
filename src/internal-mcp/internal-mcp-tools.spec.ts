@@ -11,11 +11,11 @@ import {
 
 describe('internal MCP public names and stable execution identities', () => {
   it('gives every schema exactly one canonical definition and localized title', () => {
-    expect(INTERNAL_MCP_TOOLS).toHaveLength(33);
+    expect(INTERNAL_MCP_TOOLS).toHaveLength(34);
     expect(INTERNAL_MCP_TOOLS.map((t) => t.operation)).toEqual(
       INTERNAL_MCP_IDENTITIES.map((t) => t.operation),
     );
-    expect(new Set(INTERNAL_MCP_TOOLS.map((t) => t.name)).size).toBe(33);
+    expect(new Set(INTERNAL_MCP_TOOLS.map((t) => t.name)).size).toBe(34);
     for (const tool of INTERNAL_MCP_TOOLS) {
       expect(tool.titleFr).toContain(' — ');
       expect(tool.title).toContain(' — ');
@@ -86,13 +86,20 @@ describe('internal MCP public names and stable execution identities', () => {
     for (const tool of INTERNAL_MCP_IDENTITIES) {
       const operation = tool.operation;
       expect(tool.policy.destructive).toBe(
-        ['prepare_project_git', 'local_browser_action'].includes(operation),
+        [
+          'prepare_project_git',
+          'local_browser_action',
+          'use_project_connection',
+        ].includes(operation),
       );
-      expect(tool.policy.idempotent).toBe(operation !== 'local_browser_action');
+      expect(tool.policy.idempotent).toBe(
+        !['local_browser_action', 'use_project_connection'].includes(operation),
+      );
       expect(tool.policy.openWorld).toBe(
         [
           'local_browser_read',
           'local_browser_action',
+          'use_project_connection',
           'read_project_git',
           'prepare_project_git',
           'publish_project_git',
@@ -114,11 +121,19 @@ describe('internal MCP public names and stable execution identities', () => {
       );
       expect(tool.policy.administratorOnly).toBe(
         tool.handler !== 'project' ||
-          ['project_media_manage', 'manage_task'].includes(operation),
+          [
+            'project_media_manage',
+            'manage_task',
+            'use_project_connection',
+          ].includes(operation),
       );
       expect(tool.policy.forbidImpersonation).toBe(
         tool.handler !== 'project' ||
-          ['project_media_manage', 'manage_task'].includes(operation) ||
+          [
+            'project_media_manage',
+            'manage_task',
+            'use_project_connection',
+          ].includes(operation) ||
           [
             'project_mockup_create',
             'project_mockup_manage',

@@ -23,27 +23,29 @@ export function ApprovalPurpose({ request }: { request: ApprovalRequest }) {
       ? t('approvalGoalGitCommit')
       : args.operation === 'stage_review'
         ? t('approvalGoalGitReview')
-        : args.operation === 'restore_files_review' || args.operation === 'restore_github_review'
+        : args.operation === 'restore_files_review' ||
+            args.operation === 'restore_github_review'
           ? t('approvalGoalGitRestoreReview')
-          : args.operation === 'restore_files' || args.operation === 'restore_github'
+          : args.operation === 'restore_files' ||
+              args.operation === 'restore_github'
             ? t('approvalGoalGitRestore')
             : args.operation === 'stage'
-        ? t('approvalGoalGitStage')
-        : args.operation === 'unstage'
-          ? t('approvalGoalGitUnstage')
-          : args.operation === 'create_branch'
-            ? t('approvalGoalGitCreateBranch')
-            : args.operation === 'switch_branch'
-              ? t('approvalGoalGitSwitchBranch')
-              : args.operation === 'fetch_branch'
-                ? t('approvalGoalGitFetch')
-                : args.operation === 'start_merge'
-                  ? t('approvalGoalGitMerge')
-                  : args.operation === 'continue_merge'
-                    ? t('approvalGoalGitContinueMerge')
-                    : args.operation === 'abort_merge'
-                      ? t('approvalGoalGitAbortMerge')
-                      : t('approvalGoalTool')
+              ? t('approvalGoalGitStage')
+              : args.operation === 'unstage'
+                ? t('approvalGoalGitUnstage')
+                : args.operation === 'create_branch'
+                  ? t('approvalGoalGitCreateBranch')
+                  : args.operation === 'switch_branch'
+                    ? t('approvalGoalGitSwitchBranch')
+                    : args.operation === 'fetch_branch'
+                      ? t('approvalGoalGitFetch')
+                      : args.operation === 'start_merge'
+                        ? t('approvalGoalGitMerge')
+                        : args.operation === 'continue_merge'
+                          ? t('approvalGoalGitContinueMerge')
+                          : args.operation === 'abort_merge'
+                            ? t('approvalGoalGitAbortMerge')
+                            : t('approvalGoalTool')
     : request.kind === 'fileChange'
       ? t('approvalGoalFiles')
       : request.kind === 'writeStdin'

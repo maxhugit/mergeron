@@ -38,12 +38,18 @@ export function GitConnectionEdit({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [agentEnabled, setAgentEnabled] = useState(false);
+  const [username, setUsername] = useState('');
+  const [privateKey, setPrivateKey] = useState('');
+  const [knownHosts, setKnownHosts] = useState('');
   const submitting = useRef(false);
   const https = resource.address?.startsWith('https://');
   const close = () => {
     if (submitting.current) return;
     setOpen(false);
     setToken('');
+    setPrivateKey('');
+    setKnownHosts('');
     setError(false);
   };
   const save = async () => {
@@ -59,14 +65,26 @@ export function GitConnectionEdit({
           body: JSON.stringify({
             name: name.trim(),
             expectedAddress: resource.address,
+            agentEnabled,
             // Omitting secret preserves it server-side. Never send an empty replacement.
             ...(https && token.trim()
               ? { secret: { token: token.trim() } }
-              : {}),
+              : resource.type !== 'git' && (token || privateKey)
+                ? {
+                    secret: {
+                      username,
+                      password: token,
+                      privateKey,
+                      knownHosts,
+                    },
+                  }
+                : {}),
           }),
         },
       );
       setToken('');
+      setPrivateKey('');
+      setKnownHosts('');
       setOpen(false);
       setSaved(true);
       await Promise.all([
@@ -84,6 +102,8 @@ export function GitConnectionEdit({
     } catch {
       // Do not render response diagnostics next to a credential field.
       setToken('');
+      setPrivateKey('');
+      setKnownHosts('');
       setError(true);
     } finally {
       submitting.current = false;
@@ -100,6 +120,10 @@ export function GitConnectionEdit({
         disabled={disabled || busy}
         onClick={() => {
           setName(resource.name);
+          setAgentEnabled(resource.agentEnabled ?? resource.type === 'git');
+          setUsername('');
+          setPrivateKey('');
+          setKnownHosts('');
           setToken('');
           setError(false);
           setSaved(false);
@@ -126,7 +150,13 @@ export function GitConnectionEdit({
           <DialogTitle>
             {t('gitConnectionEditTitle', { name: resource.name })}
           </DialogTitle>
-          <DialogDescription>{t('gitConnectionEditHelp')}</DialogDescription>
+          <DialogDescription>
+            {t(
+              resource.type === 'git'
+                ? 'gitConnectionEditHelp'
+                : 'remoteConnectionEditHelp',
+            )}
+          </DialogDescription>
           <form
             className="grid min-w-0 gap-4"
             onSubmit={(event) => {
@@ -158,13 +188,21 @@ export function GitConnectionEdit({
                 ? t('gitConnectionSecretPresent')
                 : t('gitConnectionSecretAbsent')}
             </p>
-            {https ? (
+            {https || resource.type !== 'git' ? (
               <label className="grid gap-1 text-sm">
-                {t('gitConnectionToken')}
+                {t(
+                  resource.type === 'git'
+                    ? 'gitConnectionToken'
+                    : 'passwordOrToken',
+                )}
                 <input
                   className={field}
                   type="password"
-                  aria-label={t('gitConnectionToken')}
+                  aria-label={t(
+                    resource.type === 'git'
+                      ? 'gitConnectionToken'
+                      : 'passwordOrToken',
+                  )}
                   value={token}
                   disabled={busy}
                   autoComplete="new-password"
@@ -173,7 +211,11 @@ export function GitConnectionEdit({
                   onChange={(event) => setToken(event.target.value)}
                 />
                 <span className="text-xs text-muted-foreground">
-                  {t('gitConnectionTokenHelp')}
+                  {t(
+                    resource.type === 'git'
+                      ? 'gitConnectionTokenHelp'
+                      : 'remoteConnectionSecretHelp',
+                  )}
                 </span>
               </label>
             ) : (
@@ -181,6 +223,47 @@ export function GitConnectionEdit({
                 {t('gitConnectionHttpsOnly')}
               </p>
             )}
+            {resource.type !== 'git' && (
+              <label className="grid gap-1 text-sm">
+                {t('username')}
+                <input
+                  className={field}
+                  value={username}
+                  autoComplete="off"
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+              </label>
+            )}
+            {['ssh', 'sftp'].includes(resource.type) && (
+              <>
+                <label className="grid gap-1 text-sm">
+                  {t('connectionPrivateKey')}
+                  <textarea
+                    className={field}
+                    value={privateKey}
+                    autoComplete="off"
+                    onChange={(e) => setPrivateKey(e.target.value)}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  {t('knownHosts')}
+                  <textarea
+                    className={field}
+                    value={knownHosts}
+                    onChange={(e) => setKnownHosts(e.target.value)}
+                  />
+                </label>
+              </>
+            )}
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={agentEnabled}
+                disabled={busy}
+                onChange={(e) => setAgentEnabled(e.target.checked)}
+              />
+              <span>{t('connectionAvailableToAgent')}</span>
+            </label>
             {error && (
               <p role="alert" className="text-sm text-destructive">
                 {t('gitConnectionSaveFailed')}

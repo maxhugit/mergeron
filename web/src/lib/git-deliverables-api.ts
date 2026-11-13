@@ -38,6 +38,7 @@ export interface Status {
   discoveryError: string | null;
   proposal?: Preview | null;
   active?: boolean;
+  queued?: boolean;
   verifiedAt?: number | null;
 }
 export type Preview = {

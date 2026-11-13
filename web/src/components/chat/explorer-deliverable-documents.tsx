@@ -63,7 +63,7 @@ export function ExplorerDeliverableDocuments({
     const issue =
       state === 'error'
         ? 'error'
-        : state === 'pending' || state === 'review'
+        : state === 'pending' || state === 'waiting' || state === 'review'
           ? 'pending'
           : null;
     const hint =
@@ -71,9 +71,11 @@ export function ExplorerDeliverableDocuments({
         ? workspaces('deliverableGitDocumentError')
         : state === 'review'
           ? workspaces('deliverableGitDocumentReview')
-          : state === 'pending'
-            ? workspaces('deliverableGitDocumentPending')
-            : undefined;
+          : state === 'waiting'
+            ? workspaces('deliverableGitStateWaiting')
+            : state === 'pending'
+              ? workspaces('deliverableGitDocumentPending')
+              : undefined;
     const Version = issue && onSynchronize ? 'button' : 'span';
     return (
       <DeliverableDocuments

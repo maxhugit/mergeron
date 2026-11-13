@@ -33,6 +33,7 @@ import { ProjectLocationsService } from './project-locations.service';
 import { ProjectConnectionsController } from './project-connections.controller';
 import { ProjectLocationTransfersController } from './project-location-transfers.controller';
 import { ProjectConnectionToolsService } from './project-connection-tools.service';
+import { ProjectRemoteToolsService } from './project-remote-tools.service';
 import { GitDeliverablesController } from './git-deliverables.controller';
 import { GitDeliverablesService } from './git-deliverables.service';
 
@@ -71,6 +72,7 @@ import { GitDeliverablesService } from './git-deliverables.service';
     ProjectIntegrityService,
     DocumentLabelsAiAdapter,
     ProjectConnectionToolsService,
+    ProjectRemoteToolsService,
     {
       provide: 'PROJECT_CONNECTION_AGENT_TOOLS',
       useExisting: ProjectConnectionToolsService,
