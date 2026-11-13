@@ -392,3 +392,42 @@ ignorent désormais ces conversations ; ils ne peuvent pas les réintroduire.
 Les anciens fichiers de secret fournis par l’hôte et les sauvegardes existantes
 ne sont pas purgés : l’application ne les lit plus pour ce mode et les nouveaux
 modèles d’installation ne demandent plus leur montage.
+
+
+## Consignes du dépôt et consignes du projet
+
+Deux fichiers portant le nom AGENTS.md peuvent coexister :
+
+- Le fichier des **connaissances partagées**, édité dans les paramètres du projet,
+  est stocké dans son espace système, sous knowledge. Il contient les règles
+  propres à ce projet Mergeron. Il n’est pas remplacé par un checkout Git.
+- Le [fichier racine du dépôt](../AGENTS.md) et ses compléments
+  [backend](../src/AGENTS.md), [interface](../web/AGENTS.md) et
+  [déploiement](../deployment/AGENTS.md) suivent la copie Git et sa révision.
+
+Pour un agent Codex, la découverte native dépend du dossier de travail effectif :
+les instructions sont recherchées depuis la racine du projet Git jusqu’à ce
+dossier. Démarrer à la racine ne charge pas d’emblée tous les fichiers des
+sous-dossiers ; le fichier racine demande donc leur lecture avant intervention
+dans le domaine concerné. Un agent rattaché à un autre dossier ou à un livrable
+ne reçoit pas les consignes d’une copie Git simplement parce qu’elle figure
+dans les sources du même projet.
+
+Indépendamment de cette découverte, Mergeron rend les connaissances partagées
+du projet accessibles à l’agent : le parcours MCP interne fournit le contexte
+actuel via project_context_read, rappelé à l’agent ; sans session MCP interne
+utilisable, notamment pour les runtimes locaux, le parcours de repli transmet
+l’instantané dans le contexte de l’échange. Ce mécanisme ne synchronise pas le
+fichier géré par Mergeron avec celui du dépôt.
+
+Exemple : pour un agent de développement ayant pour référence une copie locale
+du dépôt Mergeron, conserver les règles d’organisation propres au projet dans
+ses connaissances partagées et les règles techniques communes dans Git. Après
+modification des consignes du dépôt, demander leur relecture à un agent déjà
+ouvert ; ne pas supposer un rechargement automatique dans une session existante.
+Les runtimes locaux ne doivent pas être supposés découvrir nativement les
+AGENTS.md du dépôt comme Codex : leur demander explicitement de lire les fichiers
+accessibles nécessaires à la tâche.
+
+Ces textes guident le comportement ; ils n’accordent aucune permission
+supplémentaire et ne remplacent pas les contrôles techniques.
