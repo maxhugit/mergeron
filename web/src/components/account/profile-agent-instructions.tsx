@@ -51,6 +51,7 @@ export function ProfileAgentInstructions() {
             <select
               className="rounded-md border bg-background p-2"
               value={value.language}
+              disabled={save.isPending}
               onChange={(e) =>
                 setDraft({
                   ...value,
@@ -67,6 +68,7 @@ export function ProfileAgentInstructions() {
             {t('contextPersonalInstructions')}
             <Textarea
               rows={5}
+              disabled={save.isPending}
               maxLength={8000}
               value={value.instructions}
               onChange={(e) =>
