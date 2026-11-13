@@ -367,6 +367,11 @@ describe('agent instruction source and refresh receipts', () => {
     await expect(readInstructionFiles(root)).rejects.toThrow('missing');
   });
 
+  it('rejects invalid UTF-8 instead of silently replacing instruction bytes', async () => {
+    await writeFile(path.join(root, 'AGENTS.md'), Buffer.from([0xff, 0xfe]));
+    await expect(readInstructionFiles(root)).rejects.toThrow();
+  });
+
   it('honors override precedence without loading both files in the same directory', async () => {
     await writeFile(path.join(root, 'AGENTS.override.md'), 'Override rules');
     const files = await readInstructionFiles(root);
