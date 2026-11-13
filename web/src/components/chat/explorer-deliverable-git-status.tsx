@@ -33,6 +33,7 @@ const icons = {
   checking: Loader2,
   syncing: Loader2,
   pending: Clock3,
+  waiting: Clock3,
   off: Minus,
   noCopy: Minus,
   readOnly: Minus,
@@ -45,6 +46,7 @@ const labels = {
   checking: 'deliverableGitStateChecking',
   syncing: 'deliverableGitStateSyncing',
   pending: 'deliverableGitStatePending',
+  waiting: 'deliverableGitStateWaiting',
   off: 'deliverableGitStateOff',
   noCopy: 'deliverableGitStateNoCopy',
   readOnly: 'deliverableGitStateReadOnly',
@@ -55,7 +57,7 @@ const colors = (state: DeliverableGitState) =>
     ? 'text-emerald-600 dark:text-emerald-400'
     : state === 'error'
       ? 'text-destructive'
-      : ['pending', 'review'].includes(state)
+      : ['pending', 'waiting', 'review'].includes(state)
         ? 'text-amber-600 dark:text-amber-400'
         : 'text-muted-foreground';
 type Sync = ReturnType<typeof useDeliverableGitStatus>;

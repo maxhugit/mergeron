@@ -477,7 +477,10 @@ describe('Mergeron-first Git projection policy', () => {
     expect((await service.status('p')).active).toBe(false);
     service.reconcile('p', { copyId: 'copy' });
     service.reconcile('p', { copyId: 'copy' });
-    expect((await service.status('p')).active).toBe(true);
+    expect(await service.status('p')).toMatchObject({
+      active: false,
+      queued: true,
+    });
     await vi.waitFor(
       async () => {
         expect(await fs.readFile(path.join(folder, 'safe.md'), 'utf8')).toBe(
@@ -575,7 +578,11 @@ describe('Mergeron-first Git projection policy', () => {
     service.reconcile('p', { copyId: 'copy' });
     copyViews[0].accessMode = 'read_only';
     await vi.waitFor(
-      async () => expect((await service.status('p')).active).toBe(false),
+      async () =>
+        expect(await service.status('p')).toMatchObject({
+          active: false,
+          queued: false,
+        }),
       { timeout: 5000, interval: 50 },
     );
     await expect(fs.stat(path.join(repo, 'livrables'))).rejects.toThrow();

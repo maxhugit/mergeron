@@ -26,6 +26,7 @@ import type { GitMutationGateService } from '../threads/git-mutation-gate.servic
 import type { SettingsService } from '../settings/settings.service';
 import { SECURITY_SETTING_KEYS } from '../settings/settings.definitions';
 import { Logger } from '@nestjs/common';
+import { GitGateRefusal } from '../threads/git-mutation-gate.service';
 
 describe('Git deliverable concurrency and interrupted transfers', () => {
   let database: TestDatabase,
@@ -34,7 +35,8 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
     deliverables: DeliverablesService,
     organization: DocumentOrganizationService,
     service: GitDeliverablesService,
-    git: WorkspaceGitService;
+    git: WorkspaceGitService,
+    gate: GitMutationGateService;
   let copyViews: ReturnType<WorkspaceCopiesService['list']>;
   const scopedMutation = vi.fn((thread: string, fn: () => Promise<unknown>) =>
     fn(),
@@ -127,7 +129,7 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
     } as unknown as WorkspaceCopiesService;
     scopedMutation.mockClear();
     git = new WorkspaceGitService(copies, {} as WorkspaceResourcesService);
-    const gate = {
+    gate = {
       mutate: (fn: () => Promise<unknown>) => fn(),
       mutateDeferredFromAgent: scopedMutation,
     } as unknown as GitMutationGateService;
@@ -190,6 +192,110 @@ describe('Git deliverable concurrency and interrupted transfers', () => {
     await fs.writeFile(path.join(folder, 'notes.md'), 'first');
     return { folder, manifest };
   }
+
+  it('reports queued exports without pretending that files are being transferred', async () => {
+    service.configure('p', {
+      boardId: 'board',
+      directory: 'livrables',
+      restrictedIds: [],
+      enabled: true,
+    });
+    service.reconcile('p', { copyId: 'copy' });
+    expect(await service.status('p', 'copy')).toMatchObject({
+      queued: true,
+      active: false,
+    });
+  });
+
+  it('retries an export refused by an active agent and actually writes retained versions once Git is idle', async () => {
+    const item = await deliverables.create('p', 'board', {
+      title: 'Deferred export',
+    });
+    const doc = await upload(item.id, 'before');
+    await sync();
+    let busy = true;
+    const mutation = vi
+      .spyOn(gate, 'mutate')
+      .mockImplementation(async (run) => {
+        if (busy) throw new GitGateRefusal('GIT_BUSY');
+        return run();
+      });
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    service.onModuleInit();
+    await upload(item.id, 'latest retained version', doc.id);
+    await vi.waitFor(
+      async () => {
+        expect((await service.status('p')).copies[0]).toMatchObject({
+          pending: true,
+          lastError: 'GIT_BUSY',
+        });
+      },
+      { timeout: 4000 },
+    );
+    const file = path.join(
+      repo,
+      'livrables',
+      readableDeliverableFolder(item.title),
+      'notes.md',
+    );
+    expect(await fs.readFile(file, 'utf8')).toBe('before');
+    expect(await service.status('p')).toMatchObject({
+      active: false,
+      queued: true,
+    });
+    busy = false;
+    // No refresh, reconcile, new save or UI action: the retained retry must run.
+    await vi.waitFor(
+      async () => {
+        expect(await fs.readFile(file, 'utf8')).toBe('latest retained version');
+        expect((await service.status('p')).copies[0]).toMatchObject({
+          pending: false,
+          lastError: null,
+        });
+      },
+      { timeout: 8000, interval: 100 },
+    );
+    expect(mutation.mock.calls.length).toBeGreaterThanOrEqual(2);
+  }, 15_000);
+
+  it('advertises a transfer only after admission by the Git gate and only for its copy', async () => {
+    await deliverables.create('p', 'board', { title: 'Transfer status' });
+    const plan = await service.preview('p', options);
+    let admit!: () => void;
+    let entered!: () => void;
+    const admission = new Promise<void>((resolve) => {
+      admit = resolve;
+    });
+    const requested = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    vi.spyOn(gate, 'mutate').mockImplementation(async (run) => {
+      entered();
+      await admission;
+      return run();
+    });
+    copyViews.push({ ...copyViews[0], id: 'other' });
+    const original = gitFormat.writeGitFile;
+    let observedTransfer = false;
+    vi.spyOn(gitFormat, 'writeGitFile').mockImplementation(async (...args) => {
+      observedTransfer = true;
+      expect(await service.status('p')).toMatchObject({ active: true });
+      expect(await service.status('p', 'other')).toMatchObject({
+        active: false,
+      });
+      return original(...args);
+    });
+    const applying = service.apply('p', {
+      options,
+      fingerprint: plan.fingerprint,
+    });
+    await requested;
+    expect(await service.status('p')).toMatchObject({ active: false });
+    admit();
+    await applying;
+    expect(observedTransfer).toBe(true);
+    expect(await service.status('p')).toMatchObject({ active: false });
+  });
 
   it('rejects a concurrent local save instead of changing an accepted import into an export', async () => {
     const item = await deliverables.create('p', 'board', {

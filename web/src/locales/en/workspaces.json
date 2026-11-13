@@ -540,6 +540,7 @@
   "deliverableGitStateChecking": "Checking",
   "deliverableGitStateSyncing": "Synchronizing",
   "deliverableGitStatePending": "Export pending",
+  "deliverableGitStateWaiting": "Export waiting: Git is busy with another operation or an active agent",
   "deliverableGitDocumentError": "This document cannot synchronize: conflict or error. No automatic overwrite.",
   "deliverableGitDocumentReview": "This document needs comparison or approval before import.",
   "deliverableGitDocumentPending": "This document is waiting to be exported.",

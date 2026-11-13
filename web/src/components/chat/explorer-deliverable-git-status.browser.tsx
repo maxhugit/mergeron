@@ -195,6 +195,47 @@ test('resumes a missing document on opening Livrables and leaves the conflicting
   });
   client.clear();
 });
+test('shows a static waiting indicator when an active agent blocks exports, then recovers automatically', async () => {
+  await i18nReady;
+  await i18n.changeLanguage('fr');
+  let busy = true;
+  vi.mocked(projectsApi).mockImplementation(async () => {
+    const value = status();
+    value.queued = busy;
+    value.copies[0].pending = busy;
+    value.copies[0].lastError = busy ? 'GIT_BUSY' : null;
+    value.proposal!.changes = [];
+    return value as never;
+  });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <Panel />
+    </QueryClientProvider>,
+  );
+  const waiting =
+    'Export en attente : Git occupé par une autre opération ou un agent actif';
+  await waitFor(() => expect(screen.getAllByTitle(waiting)).toHaveLength(24));
+  expect(
+    screen
+      .getAllByTitle(waiting)
+      .every((badge) => !badge.querySelector('.animate-spin')),
+  ).toBe(true);
+  expect(
+    screen.queryByRole('status', { name: 'Synchronisation en cours' }),
+  ).toBeNull();
+  await page.screenshot({
+    path: '../../../.vitest-screenshots/deliverables-git-waiting.png',
+  });
+  busy = false;
+  await waitFor(
+    () => expect(screen.getAllByTitle('À jour localement')).toHaveLength(24),
+    { timeout: 5000 },
+  );
+  client.clear();
+});
 test.each([390, 1100])(
   'shows the selected copy and branch, internal scrolling, per-item state and read-only details at %ipx',
   async (width) => {

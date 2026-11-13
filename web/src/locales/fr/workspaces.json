@@ -540,6 +540,7 @@
   "deliverableGitStateChecking": "Vérification en cours",
   "deliverableGitStateSyncing": "Synchronisation en cours",
   "deliverableGitStatePending": "Export en attente",
+  "deliverableGitStateWaiting": "Export en attente : Git occupé par une autre opération ou un agent actif",
   "deliverableGitDocumentError": "Synchronisation de ce document bloquée : conflit ou erreur. Aucun écrasement automatique.",
   "deliverableGitDocumentReview": "Ce document nécessite une comparaison ou un import à valider.",
   "deliverableGitDocumentPending": "Export de ce document en attente.",
