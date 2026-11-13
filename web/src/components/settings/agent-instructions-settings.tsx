@@ -18,6 +18,7 @@ const MAX_LENGTH = 12_000;
 
 export function AgentInstructionsSettings({ active }: { active: boolean }) {
   const { t } = useTranslation('codexSettings');
+  const { t: tw } = useTranslation('workspaces');
   const embedded = useContext(SettingsPanelContext);
   const queryClient = useQueryClient();
   const id = useId();
@@ -80,6 +81,9 @@ export function AgentInstructionsSettings({ active }: { active: boolean }) {
       </p>
       <p className="text-xs text-muted-foreground">
         {t('commonInstructionsSafety')}
+      </p>
+      <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+        {tw('contextRefreshPolicy')}
       </p>
       {query.isPending && (
         <p role="status" className="text-sm">

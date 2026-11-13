@@ -1,3 +1,4 @@
+import { AgentContextObserverService } from '../project-knowledge/agent-context-observer.service';
 import { ActivityController } from './activity.controller';
 import { AgentProjectObserverService } from './agent-project-observer.service';
 import { LocalAgentsModule } from '../local-agents/local-agents.module';
@@ -81,6 +82,7 @@ import { ActiveFoldersModule } from '../active-folders/active-folders.module';
     WorkspacesManagementController,
   ],
   providers: [
+    AgentContextObserverService,
     AgentProjectObserverService,
     ProjectConnectionRuntimeService,
     GitMutationGateService,

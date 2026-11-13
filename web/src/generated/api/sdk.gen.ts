@@ -1101,3 +1101,87 @@ export const mcpServersStartOauthLogin = <ThrowOnError extends boolean = false>(
         ...options.headers
     }
 });
+
+
+import type {
+  AgentContextProfileData,
+  AgentContextProfileResponses,
+  AgentContextSaveProfileData,
+  AgentContextSaveProfileResponses,
+  AgentContextStatusData,
+  AgentContextStatusResponses,
+  AgentContextAssociateData,
+  AgentContextAssociateResponses,
+  AgentContextPreviewData,
+  AgentContextPreviewResponses,
+  AgentContextVerifyData,
+  AgentContextVerifyResponses,
+} from "./types.gen";
+
+export const agentContextProfile = <ThrowOnError extends boolean = false>(
+  options?: Options<AgentContextProfileData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<
+    AgentContextProfileResponses,
+    unknown,
+    ThrowOnError
+  >({ url: "/api/agent-context/profile", ...options });
+
+export const agentContextSaveProfile = <ThrowOnError extends boolean = false>(
+  options: Options<AgentContextSaveProfileData, ThrowOnError>,
+) =>
+  (options.client ?? client).patch<
+    AgentContextSaveProfileResponses,
+    unknown,
+    ThrowOnError
+  >({
+    url: "/api/agent-context/profile",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+export const agentContextStatus = <ThrowOnError extends boolean = false>(
+  options: Options<AgentContextStatusData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    AgentContextStatusResponses,
+    unknown,
+    ThrowOnError
+  >({ url: "/api/agent-context/agents/{threadId}", ...options });
+
+export const agentContextAssociate = <ThrowOnError extends boolean = false>(
+  options: Options<AgentContextAssociateData, ThrowOnError>,
+) =>
+  (options.client ?? client).patch<
+    AgentContextAssociateResponses,
+    unknown,
+    ThrowOnError
+  >({
+    url: "/api/agent-context/agents/{threadId}/source",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+export const agentContextPreview = <ThrowOnError extends boolean = false>(
+  options: Options<AgentContextPreviewData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    AgentContextPreviewResponses,
+    unknown,
+    ThrowOnError
+  >({ url: "/api/agent-context/agents/{threadId}/preview", ...options });
+
+export const agentContextVerify = <ThrowOnError extends boolean = false>(
+  options: Options<AgentContextVerifyData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    AgentContextVerifyResponses,
+    unknown,
+    ThrowOnError
+  >({ url: "/api/agent-context/agents/{threadId}/verify", ...options });

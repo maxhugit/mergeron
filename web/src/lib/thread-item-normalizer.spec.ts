@@ -311,6 +311,8 @@ describe('normalizeThreadItem', () => {
       'project_shared_knowledge',
       'document_publication',
       'mergeron_context_refresh',
+      'agent_profile_preferences',
+      'agent_git_instructions',
       'mergeron_agent_monitor',
     ].map((tag) => `<${tag}>\nInternal instructions\n</${tag}>`);
     for (const completed of [false, true]) {

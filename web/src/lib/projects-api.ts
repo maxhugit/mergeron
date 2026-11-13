@@ -186,6 +186,7 @@ export interface ProjectWorkspaceResourceSummary {
 }
 
 export interface ProjectWorkspaceCopySummary {
+  sourceConnectionId?: string | null;
   ownerAgentIds?: string[];
   ownerThreadIds?: string[];
   id: string;

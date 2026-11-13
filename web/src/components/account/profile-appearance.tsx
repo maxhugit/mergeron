@@ -1,3 +1,4 @@
+import { ProfileAgentInstructions } from './profile-agent-instructions';
 import { ProfileTextSize } from './profile-text-size';
 import { translationKey } from '@/locales/translation-key';
 import { Check, Globe, Palette } from 'lucide-react';
@@ -145,6 +146,7 @@ export function ProfileAppearance() {
         </div>
       </div>
       <ProfileTextSize />
+      <ProfileAgentInstructions />
       {save.isError && (
         <p className="text-xs text-destructive" role="alert">
           {t('unableToSaveProfilePreferences')}

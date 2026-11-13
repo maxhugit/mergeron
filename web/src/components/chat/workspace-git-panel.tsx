@@ -1,9 +1,13 @@
+import { agentContextKey, getAgentContext } from '@/lib/agent-context-api';
+import { usePlatformSession } from '@/lib/platform-session';
+import { AgentInstructionsDialog } from './agent-instructions-dialog';
 import { GitIntegrateBranch } from './git-integrate-branch';
 import { GitPullRequestTracker } from './git-pull-request-tracker';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
+  FileText,
   GitBranch,
   RefreshCw,
   Loader2,
@@ -77,6 +81,20 @@ type EntryAction = 'local' | 'remote' | 'clone' | 'info' | 'release' | 'delete';
 /** Browsing a repository never changes the agent's workspace. */
 export function WorkspaceGitPanel(props: Props) {
   const { t } = useTranslation('workspaces');
+  const session = usePlatformSession();
+  const instructionStatus = useQuery({
+    queryKey: agentContextKey(
+      props.agentThreadId ?? '',
+      session.data?.personId,
+    ),
+    queryFn: ({ signal }) => getAgentContext(props.agentThreadId!, signal),
+    enabled: Boolean(props.agentThreadId),
+    retry: false,
+    refetchInterval: 15000,
+  });
+  const [instructions, setInstructions] = useState<{
+    resourceId?: string;
+  } | null>(null);
   const [command, setCommand] = useState<{
     resourceId: string;
     action: EntryAction;
@@ -106,6 +124,30 @@ export function WorkspaceGitPanel(props: Props) {
   const resource = resources.find((item) => item.id === props.resourceId);
   return (
     <>
+      {props.agentThreadId && (
+        <>
+          <div className="shrink-0 border-b px-2 py-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="max-w-full text-xs"
+              onClick={() => setInstructions({})}
+            >
+              {t('contextTitle')}
+            </Button>
+          </div>
+          <AgentInstructionsDialog
+            key={`${props.projectId}:${props.agentThreadId}`}
+            threadId={props.agentThreadId}
+            copies={inventory.data?.copies ?? []}
+            resourceId={instructions?.resourceId}
+            open={instructions !== null}
+            onOpenChange={(open) => {
+              if (!open) setInstructions(null);
+            }}
+          />
+        </>
+      )}
       {resources.length > 0 && (
         <nav
           aria-label={t('gitRepositories')}
@@ -154,9 +196,35 @@ export function WorkspaceGitPanel(props: Props) {
                     </span>
                   </span>
                 </Button>
+                {props.agentThreadId &&
+                  inventory.data?.copies.some(
+                    (copy) =>
+                      copy.id === instructionStatus.data?.copyId &&
+                      (copy.sourceResourceId === item.id ||
+                        copy.sourceConnectionId === item.id),
+                  ) && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={t('contextSourceBadge')}
+                      onClick={() => setInstructions({ resourceId: item.id })}
+                    >
+                      <FileText className="h-3.5 w-3.5 text-primary" />
+                    </Button>
+                  )}
                 <WorkspaceEntryMenu
                   label={t('gitMenu', { name: item.name })}
                   items={[
+                    ...(props.agentThreadId
+                      ? [
+                          {
+                            label: t('contextUseSource'),
+                            disabled: !item.enabled,
+                            onSelect: () =>
+                              setInstructions({ resourceId: item.id }),
+                          },
+                        ]
+                      : []),
                     {
                       label: t('gitBrowseLocal'),
                       disabled: !own || !item.enabled,
