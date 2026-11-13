@@ -318,3 +318,71 @@ test('a grant cannot mint a foreign host and service workers cannot persist on s
   );
   await gateway.close();
 });
+
+test('verification requires the existing personal grant, never forwards tokens or grants public access', async () => {
+  let allowed = true;
+  const receipt = {
+    schemaVersion: 1,
+    generation: '33333333-3333-4333-8333-333333333333',
+    archiveSha: 'a'.repeat(64),
+    sourceFingerprint: 'b'.repeat(64),
+    gitCommit: 'c'.repeat(40),
+    copyId: 'copy',
+    syncedAt: 123,
+  };
+  const gateway = new PreviewGateway({
+    domain,
+    verifySource: async () => true,
+    authorize: async () => {
+      if (!allowed) throw Error('revoked');
+      return {
+        endpoint: 'http://pv-' + runId.replaceAll('-', '') + '-relay:8180',
+        token: 'd'.repeat(64),
+        publicHost: host,
+        expiresAt: Date.now() + 600000,
+        receipt,
+      };
+    },
+  });
+  const get = (url, cookie) =>
+    Object.assign(request(url, {}, { ...(cookie ? { cookie } : {}) }), {
+      method: 'GET',
+    });
+  try {
+    const unauthorized = response();
+    await gateway.handle(get('/.__mergeron_preview/receipt'), unauthorized);
+    assert.equal(unauthorized.statusCode, 401);
+    const link = await gateway.mint(grant);
+    const token = new URLSearchParams(new URL(link.url).hash.slice(1)).get(
+      'mergeron-preview',
+    );
+    const exchange = response();
+    await gateway.handle(
+      request('/.__mergeron_preview/session', { token }),
+      exchange,
+    );
+    const cookie = exchange.headers['set-cookie'].split(';')[0];
+    const observed = response();
+    await gateway.handle(get('/.__mergeron_preview/receipt', cookie), observed);
+    assert.deepEqual(JSON.parse(observed.body), {
+      receipt,
+      synchronized: true,
+      sourceCurrent: true,
+    });
+    assert.equal(observed.body.includes('d'.repeat(64)), false);
+    const page = response();
+    await gateway.handle(
+      get('/.__mergeron_preview/verify?path=%2F', cookie),
+      page,
+    );
+    assert.equal(page.statusCode, 200);
+    assert.match(page.headers['content-security-policy'], /frame-src 'self'/);
+    assert.equal(page.body.includes(token), false);
+    allowed = false;
+    await assert.rejects(() =>
+      gateway.handle(get('/.__mergeron_preview/receipt', cookie), response()),
+    );
+  } finally {
+    await gateway.close();
+  }
+});

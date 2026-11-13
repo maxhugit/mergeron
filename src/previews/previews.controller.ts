@@ -1,5 +1,11 @@
 import { Controller, Get, Put, Post, Param, Body, Query } from '@nestjs/common';
 import { ProjectPreviewsService } from './project-previews.service';
+import {
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOperation,
+} from '@nestjs/swagger';
+import { PreviewVerificationOpenDto } from './preview-verification.dto';
 @Controller('projects/:projectId')
 export class PreviewsController {
   constructor(private readonly previews: ProjectPreviewsService) {}
@@ -149,5 +155,15 @@ export class PreviewsController {
     @Param('threadId') t: string,
   ) {
     return this.previews.open(p, t);
+  }
+  @Post('agents/:threadId/preview/verify')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Open the authorized browser preview diagnostic' })
+  @ApiCreatedResponse({ type: PreviewVerificationOpenDto })
+  verify(
+    @Param('projectId') p: string,
+    @Param('threadId') t: string,
+  ): Promise<PreviewVerificationOpenDto> {
+    return this.previews.open(p, t, true);
   }
 }

@@ -2,6 +2,8 @@
 /** Dedicated-origin HTTP/WS gateway. Never mount this on Mergeron's origin. */
 const http = require('node:http');
 const { createHash, randomBytes } = require('node:crypto');
+const { verificationPage } = require('./preview-verification.cjs');
+const { safeReceipt } = require('./preview-receipt.cjs');
 const COOKIE = '__Host-mergeron_preview';
 const APP_COOKIE = '__Host-mergeron_preview_app_';
 const SESSION_PATH = '/.__mergeron_preview/session';
@@ -87,13 +89,14 @@ function appSetCookie(value, runId) {
   );
 }
 class PreviewGateway {
-  constructor({ domain, authorize, now = Date.now }) {
+  constructor({ domain, authorize, verifySource, now = Date.now }) {
     if (
       !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)
     )
       throw Error('PREVIEW_INVALID_DOMAIN');
     this.domain = domain;
     this.authorize = authorize;
+    this.verifySource = verifySource;
     this.now = now;
     this.tickets = new Map();
     this.sessions = new Map();
@@ -311,6 +314,48 @@ class PreviewGateway {
       return this.bootstrap(res);
     if (req.url === SESSION_PATH && req.method === 'POST')
       return this.exchange(req, res, target);
+    if (
+      req.method === 'GET' &&
+      (req.url === '/.__mergeron_preview/receipt' ||
+        req.url.startsWith('/.__mergeron_preview/verify?'))
+    ) {
+      const access = await this.access(req, target);
+      if (!access) return this.error(res, 401);
+      const nonce = randomBytes(16).toString('base64');
+      const receipt = safeReceipt(
+        access.transport.receipt,
+        access.transport.receipt?.archiveSha,
+      );
+      const sourceCurrent =
+        req.url === '/.__mergeron_preview/receipt' &&
+        receipt &&
+        this.verifySource
+          ? await this.verifySource(access.grant, receipt)
+          : null;
+      res.writeHead(200, {
+        'content-type':
+          req.url === '/.__mergeron_preview/receipt'
+            ? 'application/json; charset=utf-8'
+            : 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+        'referrer-policy': 'no-referrer',
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
+      });
+      return res.end(
+        req.url === '/.__mergeron_preview/receipt'
+          ? JSON.stringify({
+              receipt,
+              synchronized: Boolean(
+                receipt &&
+                !access.transport.syncError &&
+                sourceCurrent === true,
+              ),
+              sourceCurrent,
+            })
+          : verificationPage(nonce),
+      );
+    }
     if (req.url.startsWith('/.__mergeron_preview/'))
       return this.error(res, 404);
     const access = await this.access(req, target);

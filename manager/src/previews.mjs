@@ -8,6 +8,7 @@ import archives from '../../runtime/preview-archive.cjs';
 import { relayReadiness } from './preview-health.mjs';
 import { previewCommand } from './preview-command.mjs';
 import storage from '../../runtime/preview-storage.cjs';
+import receipts from '../../runtime/preview-receipt.cjs';
 import { PreviewInspector } from './preview-inspector.mjs';
 const { previewStorage, cacheEnvironment, readStorageObservation } = storage;
 
@@ -471,7 +472,9 @@ export class PreviewManager {
       ),
     };
   }
-  async apply(r, snapshotId, sha) {
+  async apply(r, snapshotId, sha, sourceReceipt) {
+    const receipt = sourceReceipt ? receipts.receipt(sourceReceipt) : null;
+    if (receipt && receipt.archiveSha !== sha) fail('PREVIEW_INVALID_RECEIPT');
     const { archive, entries } = await this.snapshot(r, snapshotId, sha);
     const input = await this.volume(
       r,
@@ -503,7 +506,7 @@ export class PreviewManager {
     await this.docker.putArchive(id, archive);
     await this.docker.putArchive(
       id,
-      archives.jsonArchive({ entries, removed }),
+      archives.jsonArchive({ entries, removed, receipt }),
       '/control',
     );
     await this.docker.putArchive(
@@ -513,6 +516,20 @@ export class PreviewManager {
     );
     if ((await this.docker.waitContainer(id, 45000)).StatusCode !== 0)
       fail('PREVIEW_SYNC_FAILED');
+    if (receipt) {
+      // Older running environments may still reference an older helper image.
+      // A zero exit code alone does not acknowledge the receipt-file protocol.
+      try {
+        const text = await this.docker.containerLogs(id);
+        if (
+          text.length > 1024 ||
+          JSON.parse(text.trim()).receiptGeneration !== receipt.generation
+        )
+          throw Error();
+      } catch {
+        fail('PREVIEW_RECEIPT_UNSUPPORTED');
+      }
+    }
     await this.removeObject(
       r,
       r.objects.find((c) => c.id === id),
@@ -531,6 +548,7 @@ export class PreviewManager {
     r.entries = entries;
     r.sourceSha = sha;
     r.lastSyncedAt = Date.now();
+    r.receipt = receipt ? { ...receipt, syncedAt: r.lastSyncedAt } : null;
     r.error = null;
     r.requiresRestart = dependenciesChanged || r.requiresRestart || false;
     this.save(r);
@@ -540,6 +558,10 @@ export class PreviewManager {
     await this.ready;
     if (!this.capabilities().enabled) fail('PREVIEW_NOT_CONFIGURED');
     if (this.busy) fail('PREVIEW_BUSY');
+    const receipt =
+      input?.receipt == null ? null : receipts.receipt(input.receipt);
+    if (receipt && receipt.archiveSha !== input.sourceSha)
+      fail('PREVIEW_INVALID_RECEIPT');
     for (const k of ['projectId', 'agentId'])
       if (typeof input?.[k] !== 'string' || !contract.ID.test(input[k]))
         fail('PREVIEW_INVALID_REQUEST');
@@ -564,6 +586,7 @@ export class PreviewManager {
       agentId: input.agentId,
       previewId: input.previewId,
       sourceSha: input.sourceSha,
+      ...(receipt ? { receipt } : {}),
       profile,
     });
     const previous = this.records.get(input.runId);
@@ -746,7 +769,7 @@ export class PreviewManager {
       r.storageObserverId = keeper;
       this.save(r);
       await this.docker.startContainer(keeper);
-      await this.apply(r, r.runId, input.sourceSha);
+      await this.apply(r, r.runId, input.sourceSha, input.receipt);
       const proxy = await this.add(
         r,
         'egress',
@@ -817,6 +840,7 @@ export class PreviewManager {
             'NO_PROXY=localhost,127.0.0.1,app,' +
               profile.services.map((s) => s.name).join(','),
             'PORT=' + profile.port,
+            'MERGERON_PREVIEW_RECEIPT_PATH=/workspace/.mergeron-preview-receipt.json',
             '__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=' + r.publicHost,
             ...Object.entries(profile.env).map(([k, v]) => `${k}=${v}`),
           ],
@@ -901,12 +925,21 @@ export class PreviewManager {
     const r = this.records.get(input?.runId);
     if (!r || r.state !== 'running') fail('PREVIEW_NOT_RUNNING');
     if (this.busy) fail('PREVIEW_BUSY');
-    if (r.sourceSha === input.sourceSha) return this.status(r.runId);
+    if (
+      input.receipt != null &&
+      receipts.receipt(input.receipt).archiveSha !== input.sourceSha
+    )
+      fail('PREVIEW_INVALID_RECEIPT');
+    if (
+      r.sourceSha === input.sourceSha &&
+      (!input.receipt || r.receipt?.generation === input.receipt.generation)
+    )
+      return this.status(r.runId);
     this.busy = true;
     try {
       await this.cleanupTransfers(r);
       await this.owned(r.runtimeId, r, 'preview-app');
-      await this.apply(r, input.snapshotId, input.sourceSha);
+      await this.apply(r, input.snapshotId, input.sourceSha, input.receipt);
       if (r.updateMode === 'restart') {
         await this.docker.stopContainer(r.runtimeId, 3);
         await this.docker.startContainer(r.runtimeId);
@@ -1040,6 +1073,7 @@ export class PreviewManager {
         (r.expiresAt === null ? null : (r.expiresAt - r.createdAt) / 60000),
       sourceSha: r.sourceSha,
       lastSyncedAt: r.lastSyncedAt ?? null,
+      receipt: receipts.safeReceipt(r.receipt, r.sourceSha),
       updateMode: r.updateMode,
       requiresRestart: r.requiresRestart ?? false,
       ready: health.ready === true,

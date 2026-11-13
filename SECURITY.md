@@ -123,3 +123,15 @@ suivis séparément des constats concernant `sshd`.
 Une connexion de projet n’est ni un dossier de travail ni une autorisation implicite d’exécution. Les opérations SSH/SFTP/FTP/FTPS des agents exigent l’activation explicite de cette disponibilité, un tour administrateur modifiable sans impersonation et une approbation du transport. Les commandes SSH exigent aussi le mode lecture et écriture ; elles ne sont pas isolées par la racine autorisée aux fichiers. Le compte distant doit imposer les droits adaptés à l’usage.
 
 Les identifiants sont chiffrés côté serveur ; les fichiers temporaires de clé, empreintes et configuration ont des permissions privées et sont retirés après usage. SSH ignore la configuration utilisateur, les agents d’authentification ambiants et les redirections ; les empreintes sont vérifiées strictement. Aucun hôte ni identifiant n’est fourni par l’agent. Les sorties et la durée sont bornées, la révocation est revérifiée et les demandes sont réservées avant l’envoi pour empêcher une répétition après un résultat incertain. FTPS conserve la validation TLS ; FTP reste un choix explicitement non chiffré.
+
+## Reçus de preview et vérification navigateur
+
+Les reçus de transfert sont bornés et liés à l’archive, à l’empreinte de source,
+à la copie autorisée et au run courant. Ils sont enregistrés après un transfert
+complet ; un échec conserve la génération précédente et son erreur. Ils ne
+contiennent aucun secret et n’accordent aucun droit. Le diagnostic HTTPS utilise
+la session personnelle existante, revérifie l’identité et la source et ne remet
+aucune capacité à l’agent ou à l’application. Les marqueurs HTML/CSS appartiennent
+au projet et restent des observations non fiables pour toute décision de droits.
+Leurs concordances ne prouvent pas la totalité d’une compilation. Les ressources
+illisibles restent inconnues ; CSP, TLS et contrôles d’origine ne sont pas réduits.

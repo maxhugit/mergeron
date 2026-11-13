@@ -168,5 +168,17 @@
   "reviewRecipe": "Consulter et modifier",
   "recipeEditHelp": "Arrêtez l’environnement avant de modifier sa recette. Les changements s’appliqueront au prochain démarrage ; ils ne modifient pas les fichiers du projet.",
   "saveRecipe": "Enregistrer la recette",
-  "missingRun": "Cet ancien environnement n’existe plus. Sa configuration et vos fichiers sont conservés. Cliquez sur Démarrer pour le recréer."
+  "missingRun": "Cet ancien environnement n’existe plus. Sa configuration et vos fichiers sont conservés. Cliquez sur Démarrer pour le recréer.",
+  "verification": {
+    "title": "Génération et vérification navigateur",
+    "help": "Le reçu confirme les fichiers synchronisés. La compilation et le CSS affiché se vérifient séparément dans le navigateur.",
+    "generation": "Génération synchronisée",
+    "copy": "Copie Git",
+    "noCopy": "Référence de l’agent (sans copie Git déclarée)",
+    "commit": "Commit observé",
+    "fingerprint": "Empreinte des fichiers exportés, y compris les changements non commités",
+    "unknown": "Non vérifié",
+    "missing": "Reçu indisponible. Une ancienne instance ou un Manager incompatible ne permet pas de confirmer la génération.",
+    "open": "Vérifier dans le navigateur"
+  }
 }

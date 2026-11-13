@@ -18,6 +18,10 @@ d’utilisation, installation, administration, architecture et références tech
 - [Développer et comprendre les mécanismes internes](docs/README.md#développement-et-sécurité).
 - [Comprendre les répertoires du code](#répertoires-du-dépôt).
 
+Les [environnements de test](docs/environnement-test.md#vérifier-la-génération-affichée)
+associent un reçu aux sources synchronisées et permettent de vérifier dans le
+navigateur la génération affichée, les feuilles CSS et un style calculé attendu.
+
 ## Installer
 
 Suivre [Installer Mergeron](docs/installation.md) : préparer l’hôte, configurer

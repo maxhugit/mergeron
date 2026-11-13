@@ -165,3 +165,74 @@ de l’environnement et la durée des sessions d’accès restent indépendantes
 Cette évolution doit être déployée conjointement dans l’application et dans son
 gestionnaire d’environnements ; modifier uniquement la recette du projet ne
 met pas à jour les outils MCP de l’instance qui héberge Mergeron.
+
+## Vérifier la génération affichée
+
+Dans l’environnement d’un agent, ouvrir **Génération et vérification navigateur**.
+Le reçu associe une génération aux fichiers effectivement transférés : copie Git,
+commit observé (inconnu si absent), empreinte des fichiers exportés incluant les
+modifications non commitées, archive et date du transfert terminé. Le Manager
+conserve ce reçu après redémarrage et ne l’avance pas après un transfert échoué.
+Une ancienne instance sans reçu reste explicitement non vérifiée.
+
+**Vérifier dans le navigateur** ouvre un diagnostic sur l’origine HTTPS de la
+preview, avec le même accès personnel Mergeron que l’ouverture normale. Aucun
+cookie n’est copié depuis un profil utilisateur, aucun jeton n’est donné à
+l’agent. L’accès au diagnostic est revérifié et disparaît avec la révocation ou
+l’expiration. La connexion utilisateur propre au site reste indépendante.
+
+Le diagnostic distingue :
+
+- une source modifiée depuis le reçu ou une synchronisation non confirmée ;
+- des marqueurs HTML/CSS correspondant à une ancienne génération ;
+- une feuille CSS déjà chargée dont les règles diffèrent de la réponse fraîche
+  du même serveur, sans recharger la page pour masquer l’écart ;
+- des marqueurs HTML et CSS concordants, avec les empreintes des feuilles
+  vérifiables et la date d’observation ;
+- une génération compilée inconnue lorsque l’application n’émet pas de marqueurs.
+  Une copie réussie ou HTTP 200 ne suffisent jamais à la confirmer.
+
+Le formulaire facultatif vérifie un sélecteur, une propriété CSS et sa valeur
+calculée, par exemple `#bouton-test`, `width`, `32px`. **Vérifier sans recharger**
+observe la page courante ; **Recharger la page puis vérifier** permet de constater
+la récupération. Ce contrôle ne modifie ni les sources ni les données de test.
+Il ne constitue pas encore un diagnostic complet du WebSocket de hot reload.
+
+### Contrat de marqueurs applicatifs
+
+Le runtime fournit `MERGERON_PREVIEW_RECEIPT_PATH`, pointant vers
+`/workspace/.mergeron-preview-receipt.json`. Ce fichier réservé est écrit
+atomiquement après les fichiers sources et exclu des exports. Son `syncedAt`
+peut être nul : c’est une entrée de compilation ; le reçu de transfert terminé
+est celui observé auprès du Manager. Capturer sa propriété `generation` pendant
+la compilation ou la transformation des modules, puis l’intégrer au HTML et au
+CSS effectivement produits :
+
+```html
+<meta name="mergeron-preview-generation" content="GENERATION_LUE_A_LA_COMPILATION">
+<style>:root { --mergeron-preview-generation: "GENERATION_LUE_A_LA_COMPILATION"; }</style>
+```
+
+L’adaptateur du framework doit déclarer cette entrée comme dépendance de
+compilation. Lire la génération courante à chaque requête ou l’ajouter au proxy
+ne prouverait pas que les ressources ont été recompilées. Aucun code n’est
+injecté implicitement dans l’application. Sans intégration, le contrôle des
+feuilles CSS et du style calculé reste disponible, mais la génération compilée
+reste inconnue. Les marqueurs émis par le projet sont des observations
+applicatives, pas une preuve de sécurité ni une autorisation.
+
+Les feuilles externes à l’origine, les imports CSS, le CSS injecté en ligne, les
+protections anti-iframe et les styles illisibles sont signalés comme non vérifiés.
+Les lectures sont bornées en nombre, taille et durée. Les protections d’origine,
+TLS, sessions et CSP de l’application restent appliquées.
+
+Validation automatisée du parcours : `node scripts/test-preview-verification.mjs`.
+Ce scénario utilise uniquement un proxy HTTPS et une application synthétiques,
+avec un vrai Chromium autorisé : ancienne génération, ancien CSS, récupération,
+style calculé, génération inconnue et révocation. Il ne déploie aucune instance.
+
+Après une mise à jour du Manager, un environnement déjà lancé peut encore utiliser
+un ancien auxiliaire de copie. Le reçu exige son acquittement explicite ;
+`PREVIEW_RECEIPT_UNSUPPORTED` impose une recréation explicite de cet environnement
+pour bénéficier du protocole, avec les avertissements habituels sur les données
+de test temporaires. Un code de sortie zéro de l’ancien auxiliaire ne suffit pas.
