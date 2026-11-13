@@ -17,6 +17,8 @@ sont publiques : ne pas joindre de secret, conversation privée, base ou sauvega
 complète. Pour une vulnérabilité, suivre [le signalement privé](SECURITY.md).
 L’envoi d’une demande ne garantit ni réalisation ni délai.
 
+Les agents de développement suivent les [consignes du dépôt](AGENTS.md).
+
 ## Principes
 
 - préserver la compatibilité avec `codex app-server` ;
