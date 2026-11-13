@@ -122,6 +122,7 @@ const errorCode = (e: unknown) =>
 @Injectable()
 export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
   private readonly busy = new Map<string, symbol>();
+  private readonly transferring = new Map<string, string>();
   private readonly importing = new AsyncLocalStorage<{
     board: string;
     token: symbol;
@@ -654,19 +655,22 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       proposal,
       active: Boolean(
         board &&
-        (this.busy.has(board.id) ||
-          this.planning.has(board.id) ||
-          [...this.queued].some((key) => {
-            const [boardId, , queuedCopyId] = JSON.parse(key) as [
-              string,
-              string | null,
-              string | null,
-            ];
-            return (
-              boardId === board.id &&
-              (!copyId || !queuedCopyId || queuedCopyId === copyId)
-            );
-          })),
+        this.transferring.has(board.id) &&
+        (!copyId || this.transferring.get(board.id) === copyId),
+      ),
+      queued: Boolean(
+        board &&
+        [...this.queued].some((key) => {
+          const [boardId, , queuedCopyId] = JSON.parse(key) as [
+            string,
+            string | null,
+            string | null,
+          ];
+          return (
+            boardId === board.id &&
+            (!copyId || !queuedCopyId || queuedCopyId === copyId)
+          );
+        }),
       ),
       verifiedAt: proposal ? Date.now() : null,
     };
@@ -1469,6 +1473,9 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
       options.copyId = copy.id;
       const actor = currentAccess()?.localAgentThreadId;
       const run = async () => {
+        // A retry or comparison is not a transfer. Only advertise activity once
+        // the mutation gate has admitted this copy's operation.
+        this.transferring.set(options.boardId, copy.id);
         const plan = await this.build(p, options);
         if (plan.root !== root)
           throw new ConflictException('GIT_DELIVERABLES_CHANGED');
@@ -2075,6 +2082,7 @@ export class GitDeliverablesService implements OnModuleInit, OnModuleDestroy {
         ? this.gate.mutateDeferredFromAgent(actor, run, { copyPath: root })
         : this.gate.mutate(run));
     } finally {
+      this.transferring.delete(options.boardId);
       this.busy.delete(options.boardId);
     }
   }

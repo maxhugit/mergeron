@@ -47,6 +47,16 @@ push n’est déclenché par cette reprise. Une session en cours de renouvelleme
 un accès en lecture seule ne lance aucune reprise. Un même diagnostic ne relance
 pas continuellement une opération bloquée ; **Actualiser** permet de réessayer.
 
+Une copie en attente du verrou Git affiche une horloge et « Export en attente :
+Git occupé par une autre opération ou un agent actif ». Ce n’est pas un transfert
+en cours. Le serveur conserve l’export et réessaie toutes les cinq secondes après
+un refus temporaire `GIT_BUSY` ; dès que le verrou peut être acquis, les versions
+conservées sont exportées sans clic supplémentaire. Une actualisation de l’état
+ne transforme pas cette attente en animation de transfert. « Synchronisation en
+cours » est réservé à une opération admise par le verrou, pour la copie concernée.
+Les erreurs réelles et les conflits restent visibles et ne sont pas assimilés
+à une simple attente.
+
 Les imports restent explicites. Si la comparaison contient aussi des conflits,
 **Appliquer les documents sans conflit** permet de valider les documents sûrs.
 Le résultat affiche les écarts restants, sans prétendre que toute la copie est à

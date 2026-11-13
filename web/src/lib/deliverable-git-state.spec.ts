@@ -113,6 +113,35 @@ it('never treats a timestamp, stale context, active verification or failed refre
   value.copies[0].context = { branch: 'refs/heads/main', head: 'b' };
   expect(deliverableGitState(value, 'copy')).toBe('checking');
 });
+it('distinguishes queued work, an occupied Git gate, comparison contention and real transfers', () => {
+  const value = data();
+  value.queued = true;
+  expect(deliverableGitState(value, 'copy')).toBe('pending');
+  value.copies[0].lastError = 'GIT_BUSY';
+  expect(deliverableGitState(value, 'copy')).toBe('waiting');
+  expect(deliverableGitState(value, 'copy', undefined, true)).toBe('waiting');
+  expect(deliverableGitState(value, 'copy', undefined, true, true)).toBe(
+    'error',
+  );
+  expect(documentGitState(value, 'copy', 'a', 'doc', 'notes.md')).toBe(
+    'waiting',
+  );
+  value.active = true;
+  expect(deliverableGitState(value, 'copy')).toBe('syncing');
+  value.active = false;
+  value.discoveryError = 'GIT_DELIVERABLES_BUSY';
+  expect(deliverableGitState(value, 'copy')).toBe('checking');
+  value.discoveryError = 'GIT_UNAVAILABLE';
+  expect(deliverableGitState(value, 'copy')).toBe('error');
+  value.discoveryError = null;
+  value.copies[0].lastError = 'GIT_DELIVERABLES_SYNC_FAILED';
+  expect(deliverableGitState(value, 'copy')).toBe('error');
+  value.queued = false;
+  value.copies[0].lastError = 'GIT_BUSY';
+  expect(deliverableGitState(value, 'copy')).toBe('ready');
+  value.copies[0].lastError = null;
+  expect(deliverableGitState(value, 'copy')).toBe('ready');
+});
 it('keeps per-deliverable states independent even for duplicate titles', () => {
   const value = data();
   value.proposal!.changes = [
