@@ -37,12 +37,23 @@ export class ElicitationFieldDto {
   @ApiPropertyOptional() format?: string;
 }
 
+/** Informational subject of an engine-authored MCP tool approval. */
+export class McpToolPresentationDto {
+  @ApiPropertyOptional() titleFr?: string;
+  @ApiProperty({ type: String, nullable: true }) name!: string | null;
+  @ApiProperty({ type: String, nullable: true }) title!: string | null;
+  @ApiProperty({ type: String, nullable: true }) description!: string | null;
+  @ApiProperty({ type: String, nullable: true }) argumentsJson!: string | null;
+}
+
 /**
  * Presentation chosen at admission and reconstructed from immutable parameters.
  * Browser responses select the listed permission IDs or supply the listed form
  * fields; the backend validates and encodes the actual app-server response.
  */
 export class InteractionPresentationDto {
+  @ApiPropertyOptional({ type: () => McpToolPresentationDto })
+  tool?: McpToolPresentationDto;
   @ApiProperty({ enum: ['permissions', 'elicitation'] }) kind!:
     | 'permissions'
     | 'elicitation';
