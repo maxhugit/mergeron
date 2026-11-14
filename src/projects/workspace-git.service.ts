@@ -90,10 +90,12 @@ export class WorkspaceGitService {
       checkedAt: Date.now(),
       source,
     });
-    if (this.remoteObservations.size > 1000)
-      this.remoteObservations.delete(
-        this.remoteObservations.keys().next().value!,
-      );
+    if (this.remoteObservations.size > 1000) {
+      for (const oldest of this.remoteObservations.keys()) {
+        this.remoteObservations.delete(oldest);
+        break;
+      }
+    }
   }
 
   constructor(
