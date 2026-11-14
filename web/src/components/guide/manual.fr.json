@@ -1790,6 +1790,7 @@
           {
             "title": "Lire le dépôt",
             "paragraphs": [
+              "Synchronisation distingue le commit local des références locales potentiellement obsolètes et du dernier commit distant confirmé par un push ou une récupération Mergeron. La date indique une observation historique ; un redémarrage, une autre branche ou connexion rendent cette comparaison inconnue.",
               "La vue Locale montre la copie de travail : branche courante, changements et références déjà connues. Le graphe relie les commits à leurs parents ; cliquer un commit permet d’en consulter les détails.",
               "Sous le nom du dépôt, Local indique la branche et la révision de la copie de cet agent, ou Aucune copie locale. L’explorateur affiche le nom de l’emplacement et le chemin relatif ; le chemin technique complet reste au survol.",
               "Dans Fichiers, le rouge signale des modifications non préparées, y compris les nouveaux fichiers. Le bouton … en fin de ligne regroupe les actions de fichier et Git : voir les différences, préparer pour le commit ou retirer de la préparation. Les suppressions sont aussi affichées pour pouvoir être préparées.",

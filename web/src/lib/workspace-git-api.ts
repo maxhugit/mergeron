@@ -1,3 +1,4 @@
+import type { GitSnapshotDto } from '@/generated/api';
 import {
   projectsApi,
   type ProjectWorkspaceCopySummary,
@@ -19,24 +20,9 @@ export function copyOwnedByAgent(
     (copy.ownerThreadIds ?? copy.ownerAgentIds).includes(agentId),
   );
 }
-export interface GitSnapshot {
+export type GitSnapshot = Omit<GitSnapshotDto, 'fingerprint'> & {
   fingerprint?: string;
-  branch: string | null;
-  head: string;
-  ahead: number;
-  behind: number;
-  upstream: string | null;
-  inspectedAt: number;
-  branchesLimited: boolean;
-  changes: Array<{ path: string; originalPath?: string; status: string }>;
-  branches: Array<{
-    name: string;
-    revision: string;
-    remote: boolean;
-    upstream: string;
-    tracking: string;
-  }>;
-}
+};
 export interface GitPullRequests {
   supported: boolean;
   limited: boolean;

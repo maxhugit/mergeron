@@ -1,3 +1,5 @@
+import { ApiBearerAuth, ApiOkResponse } from '@nestjs/swagger';
+import { GitSnapshotDto } from './workspace-git-snapshot.dto';
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import { WorkspaceGitService } from './workspace-git.service';
@@ -152,6 +154,8 @@ export class WorkspaceGitController {
   }
 
   @Get('copies/:copyId')
+  @ApiBearerAuth()
+  @ApiOkResponse({ type: GitSnapshotDto })
   snapshot(
     @Param('projectId') projectId: string,
     @Param('copyId') copyId: string,

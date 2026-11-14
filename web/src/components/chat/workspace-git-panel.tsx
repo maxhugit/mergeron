@@ -1068,6 +1068,21 @@ function RepositoryPanel({
                     })
                   : t('gitNoTrackingComparison')}
               </p>
+              {snapshot.data && !snapshot.error && (
+                <div className="space-y-1 break-all text-muted-foreground">
+                  <p>{t('gitLocalHead', { sha: snapshot.data.head || '—' })}</p>
+                  <p>
+                    {snapshot.data.remoteObservation
+                      ? t('gitRemoteObservation', {
+                          ...snapshot.data.remoteObservation,
+                          date: new Date(
+                            snapshot.data.remoteObservation.checkedAt,
+                          ).toLocaleString(),
+                        })
+                      : t('gitRemoteObservationUnknown')}
+                  </p>
+                </div>
+              )}
               {writable && copy && snapshot.data && !snapshot.error && (
                 <GitCopyActions
                   key={`publish:${copy.id}`}
