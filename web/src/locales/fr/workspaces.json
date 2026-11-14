@@ -524,6 +524,7 @@
   "gitDeliverablesPending": "Export en attente · à examiner après un redémarrage",
   "gitDeliverablesNotSynchronized": "Pas encore synchronisée",
   "deliverableGitStatus": "Synchronisation des livrables avec Git local",
+  "deliverableGitSynchronized": "Synchronisé localement",
   "deliverableGitLocal": "Git local",
   "deliverableGitCopy": "Copie Git des livrables",
   "deliverableGitChooseCopy": "Choisir une copie",

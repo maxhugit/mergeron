@@ -264,6 +264,7 @@ test.each([390, 1100])(
       expect(screen.getByRole('status', { name: 'À examiner' })).toBeVisible(),
     );
     expect(screen.getAllByTitle('À jour localement').length).toBe(23);
+    expect(screen.getAllByText('Synchronisé localement')).toHaveLength(23);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     const banner = screen.getByRole('region', {
       name: 'Synchronisation des livrables avec Git local',
