@@ -140,3 +140,14 @@ vers l’entrée de génération écrite après synchronisation. Cette variable 
 créée par le Manager, non configurable par la recette et sans secret. Le
 [contrat de vérification de génération](environnement-test.md#contrat-de-marqueurs-applicatifs)
 décrit son utilisation et ses limites ; elle ne modifie aucun volume ni réseau.
+
+## Sortie réseau des journaux GitHub Actions
+
+Aucune nouvelle variable ni clé transmise aux agents n’est requise. La connexion
+GitHub du projet conserve son jeton et doit disposer d’**Actions: read** pour les
+lectures privées. Le modèle Squid fourni par le Manager permet les hôtes
+`productionresultssa<N>.blob.core.windows.net` des liens signés de journaux, sans
+ouvrir tout Azure Blob. Une configuration persistante personnalisée est conservée ;
+reporter la règle dédiée selon les [prérequis d’installation](installation.md).
+Les refus privés, TLS, les restrictions de conteneur et le proxy des aperçus
+restent indépendants et inchangés.

@@ -50,6 +50,7 @@ describe('project connection agent tools', () => {
     pullRequests: vi.fn(),
     pullRequest: vi.fn(),
     checks: vi.fn(),
+    readActions: vi.fn(),
     diff: vi.fn(),
     stagedDiff: vi.fn(),
     commits: vi.fn(),
@@ -792,6 +793,78 @@ describe('project connection agent tools', () => {
         path: 'wrong',
       }),
     ).rejects.toThrow();
+  });
+
+  it.each([
+    { operation: 'workflow_runs', branch: 'main', status: 'failure' },
+    { operation: 'workflow_run', runId: 43398956550 },
+    { operation: 'workflow_jobs', runId: 43398956550, attempt: 2, page: 1 },
+    { operation: 'workflow_job_logs', runId: 43398956550, jobId: 131796715224 },
+  ])(
+    'reads Actions without any local copy or open PR: $operation',
+    async (query) => {
+      own = [];
+      git.readActions.mockImplementation(
+        async (_p: string, _c: string, _q: unknown, active: () => void) => {
+          active();
+          return { items: [], limited: false };
+        },
+      );
+      expect(
+        await call({ tool: 'read_project_git', connectionId, ...query }),
+      ).toMatchObject({
+        untrustedContent: true,
+        operation: query.operation,
+        data: { items: [] },
+      });
+      expect(git.readActions).toHaveBeenCalledWith(
+        'p',
+        connectionId,
+        expect.objectContaining(query),
+        expect.any(Function),
+      );
+      expect(git.pullRequests).not.toHaveBeenCalled();
+      await expect(
+        call({ tool: 'read_project_git', connectionId, ...query, number: 10 }),
+      ).rejects.toThrow('Invalid operation fields');
+      await expect(
+        call({
+          tool: 'read_project_git',
+          connectionId,
+          ...query,
+          copyId: 'other',
+        }),
+      ).rejects.toThrow('Invalid operation fields');
+      await expect(
+        call({
+          tool: 'read_project_git',
+          connectionId,
+          ...query,
+          jobId: '1/../../secrets',
+        }),
+      ).rejects.toThrow();
+    },
+  );
+
+  it('withholds an Actions result after connection revocation and rejects another project’s connection', async () => {
+    git.readActions.mockImplementation(async () => {
+      as('admin', () => resources.setEnabled('p', connectionId, false));
+      return { items: [] };
+    });
+    await expect(
+      call({
+        tool: 'read_project_git',
+        connectionId,
+        operation: 'workflow_runs',
+      }),
+    ).rejects.toThrow('PROJECT_CONNECTION_UNAVAILABLE');
+    await expect(
+      call({
+        tool: 'read_project_git',
+        connectionId: 'not-in-this-project',
+        operation: 'workflow_runs',
+      }),
+    ).rejects.toThrow('PROJECT_CONNECTION_UNAVAILABLE');
   });
   it('rejects missing authentication, wrong binding, revoked membership and disabled connections', async () => {
     await expect(

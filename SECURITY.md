@@ -117,7 +117,6 @@ suivis séparément des constats concernant `sshd`.
 - secret OnlyOffice ;
 - jetons OAuth et MCP.
 
-
 ## Accès distants des agents
 
 Une connexion de projet n’est ni un dossier de travail ni une autorisation implicite d’exécution. Les opérations SSH/SFTP/FTP/FTPS des agents exigent l’activation explicite de cette disponibilité, un tour administrateur modifiable sans impersonation et une approbation du transport. Les commandes SSH exigent aussi le mode lecture et écriture ; elles ne sont pas isolées par la racine autorisée aux fichiers. Le compte distant doit imposer les droits adaptés à l’usage.
@@ -144,3 +143,17 @@ fenêtre source et identifiant de requête vérifiés. Les messages HMR bruts, c
 en-têtes, cookies et jetons ne sont pas relayés. Une connexion de secours hors de
 la preview ne valide pas le parcours public ; les observations absentes restent
 inconnues. La surveillance est bornée et ne modifie pas les données du projet.
+
+## Journaux GitHub Actions
+
+Les lectures MCP Actions restent liées à une connexion GitHub et au projet du
+tour authentifié. Aucune URL ou identité de dépôt fournie par l’agent n’est
+utilisée pour envoyer un jeton ; le couple run/job est contrôlé avant lecture.
+Le lien signé de logs, obtenu uniquement depuis l’API GitHub, est limité aux
+hôtes HTTPS `productionresultssa<N>.blob.core.windows.net` et n’est pas exposé.
+Le stockage ne reçoit pas l’en-tête d’autorisation GitHub et ne peut pas
+rediriger la requête. La règle Squid dédiée reste après les refus privés ;
+aucune autorisation générale Azure Blob n’est ajoutée. Les contenus sont bornés,
+non conservés et marqués non fiables. Le masquage du jeton de connexion connu
+et des formats usuels de jetons ne peut pas détecter tout secret arbitraire
+qu’un workflow imprimerait : les auteurs doivent préserver le masquage GitHub.

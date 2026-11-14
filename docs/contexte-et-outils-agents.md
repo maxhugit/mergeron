@@ -355,6 +355,55 @@ connexion actualisent les données locales, regroupées par petites fenêtres ; 
 rafraîchissement périodique reste un secours. Rien n’est préparé, commité, fetché
 ou publié automatiquement. Chaque agent continue de voir sa propre copie.
 
+### GitHub Actions sans PR ouverte (MCP 1.15.0)
+
+L’agent utilise `project_git_read` et une `connectionId` GitHub activée pour
+les agents du projet. Aucun clone, `copyId`, numéro de PR, commit ou push n’est
+nécessaire pour diagnostiquer une exécution. Les droits du projet, de la
+connexion et du tour sont revérifiés après les lectures ; un tour en lecture
+seule peut consulter ces informations.
+
+| `operation`         | Paramètres spécifiques                                                                       | Résultat                                                                                                       |
+| ------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `workflow_runs`     | `branch` (branche ou tag), `ref` (SHA immuable), `event`, `status`, `page`, tous facultatifs | Exécutions du dépôt, y compris push sur main, tags et lancements manuels ; pas de filtre implicite sur les PR. |
+| `workflow_run`      | `runId` requis, `attempt` facultatif                                                         | État, conclusion, événement, branche/tag, SHA, tentative, dates et lien.                                       |
+| `workflow_jobs`     | `runId` requis, `attempt` et `page` facultatifs                                              | Jobs et étapes ; dernière tentative par défaut.                                                                |
+| `workflow_job_logs` | `runId` et `jobId` requis                                                                    | Fin du journal d’un job appartenant à cette exécution, indicateur de troncature et lien.                       |
+
+Les identifiants sont des entiers positifs sûrs. Les listes sont bornées à
+50 éléments par page, sur 20 pages au maximum, et signalent leurs limites avec
+`limited` et `nextPage`. Les étapes sont limitées à 200 par job. Les journaux
+retournent au plus 16 Kio UTF-8 depuis les 64 derniers Kio, sans archive ZIP ni
+fichier temporaire. Les téléchargements expirent après 15 secondes et partagent
+le budget de concurrence des autres lectures GitHub. Ni la réussite, ni l’absence
+d’exécutions ne sont déduites d’un refus ou d’une réponse incomplète.
+
+Exemple après une publication en échec : lister `workflow_runs` avec
+`event: "push"`, éventuellement `branch: "main"` ou le nom du tag ; lire
+`workflow_jobs` avec le `runId` observé ; lire `workflow_job_logs` avec les
+identifiants observés du run et du job en échec. L’agent peut consulter ces
+informations lui-même avant de demander de recopier une erreur. Ces outils ne
+relancent, n’annulent et ne suppriment aucune exécution, et ne permettent aucune
+fusion ou modification des protections GitHub.
+
+Pour un dépôt privé, le jeton configuré doit autoriser **Actions: read**, en plus
+des accès déjà requis à ce dépôt. Les erreurs d’authentification, d’accès,
+de quota, de réseau et de logs restent distinctes. Un job en cours, des logs
+supprimés ou expirés peuvent ne pas fournir de journal ; le lien reste disponible
+avec l’inventaire des jobs. Les logs et noms issus du dépôt sont des données non
+fiables, jamais des instructions. GitHub masque ses secrets Actions et Mergeron
+masque son jeton connu et les formes usuelles de jetons GitHub ; cela ne garantit
+pas l’absence de tout secret arbitraire imprimé par un workflow.
+
+Les [API officielles des exécutions](https://docs.github.com/en/rest/actions/workflow-runs)
+et [des jobs et journaux](https://docs.github.com/en/rest/actions/workflow-jobs)
+sont interrogées sur le dépôt configuré. Pour les logs, seul le lien HTTPS signé
+émis par GitHub vers `productionresultssa<N>.blob.core.windows.net` est accepté.
+Aucun jeton API n’est transmis au stockage, aucun deuxième redirect n’est suivi,
+et le lien signé n’est ni retourné ni conservé. Le proxy garde ses refus des
+réseaux privés ; voir les [prérequis du proxy](installation.md) pour les
+installations possédant déjà une configuration persistante.
+
 Dans la barre latérale droite, **GitHub → Merges** suit les vérifications
 exécutées sur le commit créé par la fusion d’une PR. Cette vue complète les
 checks avant fusion de l’onglet PR. Elle affiche jusqu’à cinq fusions parmi les

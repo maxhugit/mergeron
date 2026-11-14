@@ -1932,6 +1932,13 @@
               "Les contrôles sont actualisés toutes les 30 secondes. Le suivi est en lecture seule : il ne déclenche ni fusion, ni publication, ni déploiement."
             ],
             "warning": "Un accès Actions manquant ou une information incomplète n’est jamais présenté comme une réussite. Si GitHub ne confirme pas la dépendance, l’interface le précise sans la deviner. Pour un dépôt privé, vérifiez l’autorisation Actions en lecture de la connexion."
+          },
+          {
+            "title": "Diagnostiquer GitHub Actions sans PR ouverte",
+            "paragraphs": [
+              "Demandez à l’agent de lister les exécutions GitHub Actions de la connexion du projet, puis de lire les jobs en échec et leurs logs. Les publications sur main, tags et lancements manuels sont accessibles même sans PR ouverte ni copie locale.",
+              "Les extraits de logs sont bornés et leur troncature est indiquée. Une permission Actions en lecture et un proxy autorisant le stockage GitHub des logs peuvent être nécessaires. Un accès refusé ou un journal indisponible ne signifie pas que les contrôles ont réussi. Cette consultation ne relance et n’annule aucune exécution."
+            ]
           }
         ],
         "related": [
