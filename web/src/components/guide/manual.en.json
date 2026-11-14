@@ -1011,6 +1011,27 @@
               "Inspect logs and wait for a ready state with an available URL. Open preview checks your access. Merging a PR is not required to launch; the selected duration or an explicit stop ends the test."
             ],
             "warning": "Enabling the project permission does not configure the Manager, DNS or HTTPS. “Manager not configured” can mean that only its preview service is disabled. Correct the reported prerequisite without disabling TLS, the proxy or the sandbox."
+          },
+          {
+            "title": "Separate the two authentication layers",
+            "paragraphs": [
+              "The diagnostic separates personal Mergeron authorization and its expiry from the site member or administrator session. Failures identify the layer: denied Mergeron permissions, changed configuration, unavailable environment or a site 401/403 response.",
+              "HTTP 200 does not prove a site login: its session remains unknown. Reopening from Mergeron does not automatically renew permissions or sign out the site."
+            ]
+          },
+          {
+            "title": "Reproduce execution",
+            "paragraphs": [
+              "New previews default to NODE_ENV=development; an explicit recipe value is preserved. Install, build and launch share one shell and its exports. Exports in separate agent commands do not modify the recipe.",
+              "Use the dependency lock and a pinned package manager. Keep the server in the foreground, bound to 0.0.0.0 and the declared port. Execution and stop causes shows recorded launch settings; check effective versions in the container terminal."
+            ]
+          },
+          {
+            "title": "Read resources and stop causes",
+            "paragraphs": [
+              "Total RAM includes tmpfs pages charged to the container. File and shared memory overlap; volume usage must not be added to this total. Missing measurements mean unknown, never zero.",
+              "The stop cause is retained: Docker-confirmed OOM, process exit, startup deadline, expiry or requested stop. Exit 137 alone does not prove an OOM; a full volume is a separate diagnostic. Stopped measurements are historical and temporary volumes are deleted on stop, recreation or expiry."
+            ]
           }
         ],
         "related": [

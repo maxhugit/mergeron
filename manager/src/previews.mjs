@@ -632,6 +632,12 @@ export class PreviewManager {
       volumes: [],
       networks: [],
       entries: [],
+      execution: {
+        runtime: profile.runtime,
+        nodeEnv: profile.env.NODE_ENV ?? 'development',
+        directory: profile.directory,
+        updateMode: profile.updateMode,
+      },
       updateMode: profile.updateMode,
       path: profile.path,
       // Stable per work agent; run IDs still isolate resources and grants.
@@ -828,6 +834,10 @@ export class PreviewManager {
             '/workspace' +
             (profile.directory === '.' ? '' : '/' + profile.directory),
           Env: [
+            'PATH=' +
+              cacheEnvironment.PNPM_HOME +
+              ':/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/nodejs/bin',
+            'NODE_ENV=' + (profile.env.NODE_ENV ?? 'development'),
             ...Object.entries(cacheEnvironment).map(([k, v]) => `${k}=${v}`),
             'HTTP_PROXY=http://egress:3129',
             'HTTPS_PROXY=http://egress:3129',
@@ -842,7 +852,9 @@ export class PreviewManager {
             'PORT=' + profile.port,
             'MERGERON_PREVIEW_RECEIPT_PATH=/workspace/.mergeron-preview-receipt.json',
             '__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=' + r.publicHost,
-            ...Object.entries(profile.env).map(([k, v]) => `${k}=${v}`),
+            ...Object.entries(profile.env)
+              .filter(([k]) => k !== 'NODE_ENV')
+              .map(([k, v]) => `${k}=${v}`),
           ],
           HostConfig: {
             ...this.base(internal, profile.memoryMb, profile.cpus),
@@ -997,7 +1009,7 @@ export class PreviewManager {
       r.expiresAt <= Date.now() &&
       !this.busy
     )
-      await this.stop(runId);
+      await this.stop(runId, false, 'expired');
     if (r.state === 'running') {
       const runtime = await this.owned(r.runtimeId, r, 'preview-app');
       if (!runtime.State?.Running) {
@@ -1005,6 +1017,10 @@ export class PreviewManager {
         r.error = runtime.State?.OOMKilled
           ? 'PREVIEW_MEMORY_LIMIT'
           : 'PREVIEW_PROCESS_EXITED';
+        await this.captureTermination(
+          r,
+          runtime.State?.OOMKilled ? 'memory_limit' : 'process_exit',
+        );
         this.save(r);
       }
     }
@@ -1047,6 +1063,7 @@ export class PreviewManager {
           await this.docker.stopContainer(r.runtimeId, 3);
           r.state = 'failed';
           r.error = 'PREVIEW_STARTUP_TIMEOUT';
+          await this.captureTermination(r, 'startup_timeout');
           this.save(r);
         } finally {
           this.busy = false;
@@ -1060,6 +1077,8 @@ export class PreviewManager {
       projectId: r.projectId,
       agentId: r.agentId,
       state: r.state,
+      execution: r.execution ?? null,
+      termination: r.termination ?? null,
       cleanupComplete:
         r.state === 'stopped' &&
         r.objects.length === 0 &&
@@ -1218,7 +1237,38 @@ export class PreviewManager {
     for (const r of runs) await this.stop(r.runId, true);
     return { deleted: true, cleanupComplete: true };
   }
-  async stop(runId, forget = false) {
+  async captureTermination(r, cause) {
+    const object = r.objects.find((o) => o.component === 'preview-app');
+    if (!object) return;
+    let c;
+    try {
+      c = await this.owned(object.id, r, object.component);
+    } catch (error) {
+      if (missing(error)) return;
+      throw error;
+    }
+    const state = c.State ?? {};
+    // Never infer OOM from exit 137 or from application-controlled log text.
+    r.termination = {
+      cause: state.OOMKilled === true ? 'memory_limit' : cause,
+      observedAt: Date.now(),
+      exitCode:
+        !state.Running &&
+        Number.isInteger(state.ExitCode) &&
+        state.ExitCode >= 0 &&
+        state.ExitCode <= 255
+          ? state.ExitCode
+          : null,
+      oomKilled: state.OOMKilled === true,
+      finishedAt:
+        typeof state.FinishedAt === 'string' &&
+        /^20\d\d-/.test(state.FinishedAt) &&
+        Number.isFinite(Date.parse(state.FinishedAt))
+          ? state.FinishedAt
+          : null,
+    };
+  }
+  async stop(runId, forget = false, cause = 'user_stop') {
     await this.ready;
     const r = this.records.get(runId);
     if (!r) {
@@ -1230,6 +1280,7 @@ export class PreviewManager {
     try {
       await this.reconcile(r);
       await this.observeStorage(r);
+      if (!r.termination) await this.captureTermination(r, cause);
       await this.cleanup(r);
       r.state = 'stopped';
       r.stoppedAt = Date.now();
@@ -1258,7 +1309,7 @@ export class PreviewManager {
         r.expiresAt !== null &&
         r.expiresAt <= Date.now()
       )
-        await this.stop(r.runId);
+        await this.stop(r.runId, false, 'expired');
       else if (
         !r.objects.length &&
         ['stopped', 'failed'].includes(r.state) &&

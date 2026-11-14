@@ -49,11 +49,36 @@ it('publishes the typed verification bootstrap contract used by the browser SDK'
     ).toMatchObject({
       required: ['url', 'expiresAt'],
     });
+    const diagnostics =
+      document.paths[
+        '/api/projects/{projectId}/agents/{threadId}/preview/diagnostics'
+      ].get!;
+    expect(diagnostics.operationId).toBe('previews_diagnostics');
+    expect(diagnostics.security).toEqual([{ bearer: [] }]);
+    expect(diagnostics.responses['200']).toMatchObject({
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/PreviewDiagnosticsDto' },
+        },
+      },
+    });
+    expect(document.components?.schemas?.PreviewDiagnosticsDto).toMatchObject({
+      required: ['runId', 'state', 'execution', 'termination'],
+    });
     // Optional local export for focused SDK regeneration without unrelated API changes.
     if (process.env.PREVIEW_OPENAPI_EXPORT)
       await writeFile(
         process.env.PREVIEW_OPENAPI_EXPORT,
-        JSON.stringify({ ...document, paths: { [url]: { post: operation } } }),
+        JSON.stringify({
+          ...document,
+          paths: {
+            [url]: { post: operation },
+            '/api/projects/{projectId}/agents/{threadId}/preview/diagnostics':
+              document.paths[
+                '/api/projects/{projectId}/agents/{threadId}/preview/diagnostics'
+              ],
+          },
+        }),
       );
   } finally {
     await app.close();

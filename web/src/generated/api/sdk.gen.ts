@@ -1112,3 +1112,15 @@ export const previewsVerify = <ThrowOnError extends boolean = false>(options: Op
     url: '/api/projects/{projectId}/agents/{threadId}/preview/verify',
     ...options
 });
+
+
+import type { PreviewsDiagnosticsData, PreviewsDiagnosticsResponses } from './types.gen';
+
+/**
+ * Read preview execution and termination diagnostics without executing project commands
+ */
+export const previewsDiagnostics = <ThrowOnError extends boolean = false>(options: Options<PreviewsDiagnosticsData, ThrowOnError>) => (options.client ?? client).get<PreviewsDiagnosticsResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/projects/{projectId}/agents/{threadId}/preview/diagnostics',
+    ...options
+});

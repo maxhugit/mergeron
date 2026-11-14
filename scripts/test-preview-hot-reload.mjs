@@ -17,7 +17,7 @@ import { chromium } from 'playwright-core';
 import { createServer } from '../web/node_modules/vite/dist/node/index.js';
 import { mergeronPreview } from '../runtime/preview-vite-plugin.mjs';
 import gatewayModule from '../runtime/preview-gateway.cjs';
-const { PreviewGateway } = gatewayModule;
+const { PreviewGateway, PreviewAccessError } = gatewayModule;
 const previewId = '11111111-1111-4111-8111-111111111111';
 const runId = '22222222-2222-4222-8222-222222222222';
 const host = previewId + '.preview.fixture.test',
@@ -94,7 +94,7 @@ try {
     domain: 'preview.fixture.test',
     verifySource: async () => true,
     authorize: async () => {
-      if (!authorized) throw Error('revoked');
+      if (!authorized) throw new PreviewAccessError('permission_denied');
       return {
         endpoint: `http://pv-${runId.replaceAll('-', '')}-relay:8180`,
         token: 'd'.repeat(64),
@@ -286,7 +286,7 @@ try {
   authorized = false;
   await page.locator('#check').click();
   await page.waitForFunction(
-    () => document.querySelector('#result')?.dataset.state === 'accessExpired',
+    () => document.querySelector('#result')?.dataset.state === 'accessDenied',
   );
   console.log(
     'Real Vite HMR passed: authorized TLS proxy, receipt watcher, actual HMR socket round-trip, CSS 120px → 32px without reload, missing watcher generation, blocked WebSocket and revoked access.',

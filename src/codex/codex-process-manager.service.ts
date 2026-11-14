@@ -20,7 +20,10 @@ import type { ServerRequestHandler } from './server-request-owner';
 import { SettingsService } from '../settings/settings.service';
 import { GENERAL_SETTING_KEYS } from '../settings/settings.definitions';
 import { DocumentProtectionService } from '../document-publication/document-protection.service';
-import { agentEnvironmentCommand } from './agent-environment';
+import {
+  agentEnvironmentCommand,
+  agentChildEnvironment,
+} from './agent-environment';
 import {
   documentAgentEnvironment,
   documentIsolationArgs,
@@ -314,11 +317,11 @@ export class CodexProcessManager implements OnModuleInit, OnModuleDestroy {
         : []),
     ];
     const command = agentEnvironmentCommand(binary, args);
-    const environment = {
+    const environment = agentChildEnvironment({
       ...process.env,
       PATH: this.storage.paths.childPath ?? process.env.PATH,
       CODEX_HOME: this.storage.paths.home,
-    };
+    });
     const child = spawn(
       isolation ? '/usr/bin/bwrap' : command.binary,
       isolation
@@ -326,7 +329,15 @@ export class CodexProcessManager implements OnModuleInit, OnModuleDestroy {
         : command.args,
       {
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: isolation ? documentAgentEnvironment(environment) : environment,
+        env: isolation
+          ? {
+              ...documentAgentEnvironment(environment),
+              // Reintroduce only these server-selected launch settings after the
+              // administrative credential filter, never the private namespace.
+              MERGERON_AGENT_NODE_BINARY: process.execPath,
+              MERGERON_AGENT_NODE_ENV: environment.NODE_ENV,
+            }
+          : environment,
       },
     );
     let stderr = '';

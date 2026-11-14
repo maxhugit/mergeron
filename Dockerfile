@@ -61,7 +61,7 @@ COPY package.json pnpm-lock.yaml* ./
 RUN --mount=type=cache,id=pnpm-root,target=/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile --store-dir=/pnpm/store
 COPY src/ ./src/
-COPY runtime/preview-profile.cjs runtime/preview-profile.d.cts runtime/preview-snapshot.py runtime/preview-gateway.cjs runtime/preview-gateway.d.cts runtime/preview-verification.cjs ./runtime/
+COPY runtime/preview-profile.cjs runtime/preview-profile.d.cts runtime/preview-snapshot.py runtime/preview-gateway.cjs runtime/preview-gateway.d.cts runtime/preview-verification.cjs runtime/preview-access.cjs ./runtime/
 COPY runtime/preview-receipt.cjs runtime/preview-receipt.d.cts runtime/preview-storage.cjs runtime/preview-storage.d.cts ./runtime/
 COPY runtime/managed-cli.cjs ./runtime/managed-cli.cjs
 COPY runtime/managed-cli.d.cts ./runtime/managed-cli.d.cts
@@ -365,7 +365,7 @@ COPY scripts/provision-person.cjs ./scripts/provision-person.cjs
 COPY scripts/setup-admin.cjs ./scripts/setup-admin.cjs
 COPY scripts/codex-cli-dispatch.sh /usr/local/bin/codex-cli-dispatch
 COPY runtime/preview-profile.cjs runtime/preview-snapshot.py runtime/preview-gateway.cjs /app/runtime/
-COPY runtime/preview-receipt.cjs runtime/preview-verification.cjs runtime/preview-storage.cjs /app/runtime/
+COPY runtime/preview-receipt.cjs runtime/preview-verification.cjs runtime/preview-access.cjs runtime/preview-storage.cjs /app/runtime/
 COPY runtime/preview-vite-plugin.mjs /app/runtime/
 COPY runtime/managed-cli.cjs /app/runtime/managed-cli.cjs
 COPY scripts/resolve-managed-cli.cjs ./scripts/resolve-managed-cli.cjs

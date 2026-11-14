@@ -517,6 +517,18 @@ export async function run(options, deps = {}) {
   return {
     success: !checks.some((item) => item.status === 'failed'),
     node: process.versions.node,
+    execution: {
+      executable: process.execPath,
+      mode: ['development', 'production', 'test'].includes(env.NODE_ENV)
+        ? env.NODE_ENV
+        : 'unknown',
+      launcher:
+        env.MERGERON_AGENT_NODE_BINARY === process.execPath
+          ? 'mergeron'
+          : 'external',
+      server:
+        'Use the managed preview lifecycle; shell exports do not persist between separate commands.',
+    },
     platform: process.platform,
     cwd: options.cwd,
     scope:

@@ -1011,6 +1011,27 @@
               "Consultez les logs et attendez l’état prêt avec une URL disponible. Ouvrir l’aperçu vérifie vos droits. Une fusion de PR n’est pas nécessaire à ce lancement ; la durée choisie ou un arrêt explicite termine ensuite le test."
             ],
             "warning": "Cocher l’autorisation du projet ne configure ni le Manager, ni le DNS, ni HTTPS. « Manager non configuré » peut désigner uniquement son service d’aperçus désactivé. En cas de prérequis manquant, corrigez le réglage indiqué sans désactiver TLS, le proxy ou la sandbox."
+          },
+          {
+            "title": "Séparer les deux authentifications",
+            "paragraphs": [
+              "Le diagnostic distingue l’autorisation personnelle Mergeron, avec sa date d’expiration, de la session membre ou administrateur du site. Un refus indique la couche concernée : droits Mergeron refusés, configuration modifiée, environnement indisponible ou réponse 401/403 du site.",
+              "Une réponse 200 ne prouve pas une connexion au site : sa session reste inconnue. Rouvrir depuis Mergeron ne renouvelle aucun droit automatiquement et ne déconnecte pas le site."
+            ]
+          },
+          {
+            "title": "Reproduire l’exécution",
+            "paragraphs": [
+              "Les nouvelles previews utilisent NODE_ENV=development par défaut ; une valeur explicite dans la recette est conservée. Installation, compilation et lancement partagent le même shell et ses exports. Un export dans une commande d’agent séparée ne modifie pas la recette.",
+              "Utilisez le verrou de dépendances et un gestionnaire épinglé. Gardez le serveur au premier plan, sur le port déclaré et 0.0.0.0. Le panneau Exécution et causes d’arrêt affiche les paramètres enregistrés ; contrôlez les versions effectives dans le terminal du conteneur."
+            ]
+          },
+          {
+            "title": "Lire les ressources et les arrêts",
+            "paragraphs": [
+              "La RAM totale comprend les pages tmpfs imputées au conteneur. Fichiers et mémoire partagée se recouvrent ; les occupations des volumes ne s’ajoutent pas à ce total. Une mesure absente est inconnue, jamais zéro.",
+              "La cause d’arrêt est conservée : OOM confirmé par Docker, sortie du processus, délai dépassé, expiration ou arrêt demandé. Le code 137 seul ne prouve pas un manque de RAM ; un volume plein est un autre diagnostic. Les relevés après arrêt sont historiques et les volumes temporaires sont supprimés à l’arrêt, à la recréation ou à l’expiration."
+            ]
           }
         ],
         "related": [

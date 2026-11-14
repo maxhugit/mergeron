@@ -41,8 +41,8 @@ fourni est conservé, notamment pour une autre cible comme Electron. Cela évite
 les téléchargements inutiles d’en-têtes, sans garantir que tous les modules
 natifs d’un projet pourront être compilés.
 
-Les installations locales depuis les sources sans ce lanceur conservent leur
-comportement existant. La nouvelle image et le redémarrage du processus Core
+Les installations locales depuis les sources sans ce lanceur ne préparent pas
+ces caches privés. La nouvelle image et le redémarrage du processus Core
 sont nécessaires pour initialiser les caches ; cela ne change pas la politique
 en lecture seule d’une session.
 
@@ -140,3 +140,24 @@ faut aussi exécuter la commande depuis le terminal de cet agent après déploie
 
 Références : [cache Corepack](https://github.com/nodejs/corepack#environment-variables),
 [en-têtes node-gyp](https://github.com/nodejs/node-gyp#command-options).
+
+## Node et variables des processus de travail
+
+Les nouveaux processus Core et terminaux de workspace reçoivent le chemin
+absolu du Node exécutant Mergeron et un PATH qui le privilégie, tout en conservant
+les entrées personnalisées. Dans l’image, le lanceur retrouve également ses
+outils si le PATH hérité est incomplet et ajoute son répertoire pnpm privé.
+`NODE_ENV` vaut `development` pour ces processus de travail, indépendamment du
+`production` du serveur Mergeron. Un administrateur peut choisir explicitement
+`MERGERON_AGENT_NODE_ENV=production` ou `test` ; une valeur inconnue est refusée
+par le lanceur avec un code stable, sans réafficher sa valeur. Le backend garde
+son propre mode. Redémarrer le Core ou ouvrir un nouveau terminal pour appliquer
+ce changement ; une session existante n’est pas réécrite.
+
+Le rapport JSON de `mergeron-environment-check` précise le Node réellement
+exécuté, son mode et l’origine du lancement, sans exporter les variables. Il ne
+vaut que pour le processus appelant : le terminal workspace et une preview
+isolée peuvent utiliser des images différentes. Une nouvelle commande d’agent
+n’hérite pas des exports d’une précédente ; utiliser les variables de la recette
+pour le serveur de preview. Ses trois phases conservent, elles, les exports et
+le dossier de travail dans un même shell.

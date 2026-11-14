@@ -1,3 +1,4 @@
+import { previewDiagnostics } from './preview-diagnostics.dto';
 import { ThreadDeletionRegistryService } from '../thread-deletion/thread-deletion-registry.service';
 import {
   Injectable,
@@ -58,6 +59,7 @@ import { previewGitCommit, sourceReceipt } from './preview-source-receipt';
 import { IdentityService } from '../auth/identity.service';
 import {
   PreviewGateway,
+  PreviewAccessError,
   type PreviewGrant,
   type PreviewTransport,
 } from '../../runtime/preview-gateway.cjs';
@@ -93,6 +95,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       throw new Error('PREVIEW_DOMAIN_OVERLAPS_APPLICATION');
     this.gateway = new PreviewGateway({
       domain,
+      mergeronUrl: publicUrl,
       authorize: (grant) => this.authorizePreview(grant),
       verifySource: (grant, receipt) => this.verifySource(grant, receipt),
     });
@@ -113,57 +116,68 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
   private async authorizePreview(
     grant: PreviewGrant,
   ): Promise<PreviewTransport> {
-    if (
-      grant.identity.kind !== 'person' ||
-      !grant.identity.personId ||
-      grant.identity.impersonation
-    )
-      throw new ForbiddenException('PREVIEW_ACCESS_DENIED');
-    const identity = this.identities.current(grant.identity);
-    this.identities.requireActive(identity);
-    this.identities.requireProject(identity, grant.projectId);
-    this.identities.requireThread(identity, grant.threadId);
-    const permittedSource = accessContext.run(
-      { identity, identities: this.identities },
-      () => this.resolveSource(grant.projectId, grant.threadId),
-    );
-    const row = this.row(workAgentId(this.db, grant.threadId));
-    if (
-      !row ||
-      row.projectId !== grant.projectId ||
-      row.previewId !== grant.previewId ||
-      row.runId !== grant.runId ||
-      row.sourcePath !== permittedSource.path ||
-      row.state !== 'running'
-    )
-      throw new ForbiddenException('PREVIEW_ACCESS_DENIED');
-    const effective = this.effectiveProfile(grant.projectId, row.agentId);
-    if (
-      !effective.profile.enabled ||
-      effective.revision !== row.profileRevision
-    )
-      throw new ForbiddenException('PREVIEW_CONFIGURATION_CHANGED');
-    const result = await this.manager.request('transport', {
-      runId: row.runId,
-    });
-    if (
-      result.projectId !== row.projectId ||
-      result.agentId !== row.agentId ||
-      result.runId !== row.runId ||
-      typeof result.endpoint !== 'string' ||
-      typeof result.token !== 'string' ||
-      typeof result.publicHost !== 'string' ||
-      typeof result.expiresAt !== 'number'
-    )
-      throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');
-    return {
-      endpoint: result.endpoint,
-      token: result.token,
-      publicHost: result.publicHost,
-      expiresAt: result.expiresAt,
-      receipt: this.verifiedReceipt(row, result.receipt),
-      syncError: row.error ?? result.error ?? null,
-    };
+    try {
+      if (
+        grant.identity.kind !== 'person' ||
+        !grant.identity.personId ||
+        grant.identity.impersonation
+      )
+        throw new PreviewAccessError('permission_denied');
+      const identity = this.identities.current(grant.identity);
+      this.identities.requireActive(identity);
+      this.identities.requireProject(identity, grant.projectId);
+      this.identities.requireThread(identity, grant.threadId);
+      const permittedSource = accessContext.run(
+        { identity, identities: this.identities },
+        () => this.resolveSource(grant.projectId, grant.threadId),
+      );
+      const row = this.row(workAgentId(this.db, grant.threadId));
+      if (!row || row.projectId !== grant.projectId)
+        throw new PreviewAccessError('environment_unavailable');
+      if (
+        row.previewId !== grant.previewId ||
+        row.runId !== grant.runId ||
+        row.sourcePath !== permittedSource.path
+      )
+        throw new PreviewAccessError('configuration_changed');
+      if (row.state !== 'running')
+        throw new PreviewAccessError('environment_unavailable');
+      const effective = this.effectiveProfile(grant.projectId, row.agentId);
+      if (
+        !effective.profile.enabled ||
+        effective.revision !== row.profileRevision
+      )
+        throw new PreviewAccessError('configuration_changed');
+      const result = await this.manager.request('transport', {
+        runId: row.runId,
+      });
+      if (
+        result.projectId !== row.projectId ||
+        result.agentId !== row.agentId ||
+        result.runId !== row.runId ||
+        typeof result.endpoint !== 'string' ||
+        typeof result.token !== 'string' ||
+        typeof result.publicHost !== 'string' ||
+        typeof result.expiresAt !== 'number'
+      )
+        throw new PreviewAccessError('environment_unavailable');
+      return {
+        endpoint: result.endpoint,
+        token: result.token,
+        publicHost: result.publicHost,
+        expiresAt: result.expiresAt,
+        receipt: this.verifiedReceipt(row, result.receipt),
+        syncError: row.error ?? result.error ?? null,
+      };
+    } catch (error) {
+      if (error instanceof PreviewAccessError) throw error;
+      if (
+        error instanceof HttpException &&
+        [401, 403].includes(error.getStatus())
+      )
+        throw new PreviewAccessError('permission_denied');
+      throw new PreviewAccessError('environment_unavailable');
+    }
   }
   async open(projectId: string, threadId: string, verify = false) {
     const scope = this.scope(projectId, threadId),
@@ -181,19 +195,32 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
     if (observed.preview?.ready !== true)
       throw new ConflictException('PREVIEW_NOT_READY');
     this.scope(projectId, threadId);
-    return this.gateway.mint(
-      {
-        projectId,
-        threadId,
-        previewId: row.previewId,
-        runId: row.runId,
-        identity,
-      },
-      verify
-        ? '/.__mergeron_preview/verify?path=' +
-            encodeURIComponent(effective.profile.path)
-        : effective.profile.path,
-    );
+    try {
+      return await this.gateway.mint(
+        {
+          projectId,
+          threadId,
+          previewId: row.previewId,
+          runId: row.runId,
+          identity,
+        },
+        verify
+          ? '/.__mergeron_preview/verify?path=' +
+              encodeURIComponent(effective.profile.path)
+          : effective.profile.path,
+      );
+    } catch (error) {
+      if (error instanceof PreviewAccessError) {
+        const status =
+          error.reason === 'permission_denied'
+            ? 403
+            : error.reason === 'configuration_changed'
+              ? 409
+              : 503;
+        throw new HttpException(error.message, status);
+      }
+      throw error;
+    }
   }
   private snapshotDirectory(projectId: string, snapshotId: string) {
     if (!contract.ID.test(projectId) || !contract.RUN_ID.test(snapshotId))
@@ -1173,6 +1200,12 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       .where(eq(agentPreviews.agentId, agentId))
       .get();
   }
+  async diagnostics(projectId: string, threadId: string) {
+    const result = await this.status(projectId, threadId);
+    return (
+      result.preview?.diagnostics ?? previewDiagnostics({ state: 'absent' })
+    );
+  }
   async status(projectId: string, threadId: string, deadlineMs?: number) {
     const scope = this.scope(projectId, threadId),
       row = this.row(scope.agentId);
@@ -1261,6 +1294,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         httpStatus:
           typeof observed.httpStatus === 'number' ? observed.httpStatus : null,
         storage: storage.safeStorageStatus(observed.storage),
+        diagnostics: previewDiagnostics({ ...observed, runId: row.runId }),
         cleanup:
           observed.state === 'stopped' && observed.cleanupComplete === true
             ? {

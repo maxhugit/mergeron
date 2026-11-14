@@ -100,6 +100,8 @@ describe('CodexProcessManager unattended start failures', () => {
   it('runs the image cache launcher inside isolation with the sanitized environment', async () => {
     mocks.cacheLauncher = true;
     vi.stubEnv('WEBUI_API_KEY', 'private-canary');
+    vi.stubEnv('MERGERON_AGENT_NODE_ENV', 'test');
+    vi.stubEnv('MERGERON_SECRET_CANARY', 'private-canary');
     const plan = {
       home: fixture.home,
       databasePath: join(fixture.home, 'application.sqlite'),
@@ -135,6 +137,10 @@ describe('CodexProcessManager unattended start failures', () => {
     );
     expect(options.env.WEBUI_API_KEY).toBeUndefined();
     expect(options.env.CODEX_HOME).toBe(fixture.home);
+    expect(options.env.MERGERON_SECRET_CANARY).toBeUndefined();
+    expect(options.env.MERGERON_AGENT_NODE_BINARY).toBe(process.execPath);
+    expect(options.env.MERGERON_AGENT_NODE_ENV).toBe('test');
+    expect(options.env.NODE_ENV).toBe('test');
   });
 
   it('keeps retrying a transient first-boot failure instead of staying down', async () => {
