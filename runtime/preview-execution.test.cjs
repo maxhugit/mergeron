@@ -90,3 +90,16 @@ test('PORT conflicts and detached servers block launch without disclosing stored
     /secret-mode|secret-port|private/,
   );
 });
+
+test('both runtime images and the isolated Docker fixture ship the shared validation module', () => {
+  const fs = require('node:fs');
+  for (const file of [
+    'Dockerfile',
+    'Dockerfile.manager',
+    'manager/test/Dockerfile.previews',
+  ])
+    assert.match(
+      fs.readFileSync(file, 'utf8'),
+      /COPY runtime\/preview-execution\.cjs/,
+    );
+});
