@@ -501,6 +501,13 @@ for (const width of [1180, 390])
     );
     const logs = await screen.findByLabelText('Logs');
     expect(logs.clientHeight).toBeGreaterThan(60);
+    const diagnostics = screen.getByRole('region', {
+      name: 'Exécution et causes d’arrêt',
+    });
+    diagnostics.focus();
+    expect(diagnostics).toHaveFocus();
+    diagnostics.scrollTop = diagnostics.scrollHeight;
+    expect(diagnostics.scrollTop).toBeGreaterThan(0);
     await page.screenshot({
       path: `../../../.vitest-screenshots/preview-diagnostics-${width}.png`,
     });

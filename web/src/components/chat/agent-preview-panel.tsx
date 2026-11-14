@@ -414,7 +414,12 @@ export function AgentPreviewPanel({
           {notice}
         </p>
       )}
-      <div className="max-h-[20%] shrink-0 overflow-y-auto overscroll-contain">
+      <div
+        role="region"
+        aria-label={t('runtimeDiagnostics.title')}
+        tabIndex={0}
+        className="max-h-[20%] shrink-0 overflow-y-auto overscroll-contain focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
         {preview && (
           <div className="shrink-0 px-3 py-1">
             <PreviewReceiptSummary
