@@ -6,6 +6,12 @@ const { verificationPage } = require('./preview-verification.cjs');
 const { safeReceipt } = require('./preview-receipt.cjs');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
+const {
+  PreviewAccessError,
+  accessCodes,
+  accessPage,
+  safeMergeronUrl,
+} = require('./preview-access.cjs');
 const COOKIE = '__Host-mergeron_preview';
 const APP_COOKIE = '__Host-mergeron_preview_app_';
 const SESSION_PATH = '/.__mergeron_preview/session';
@@ -91,7 +97,13 @@ function appSetCookie(value, runId) {
   );
 }
 class PreviewGateway {
-  constructor({ domain, authorize, verifySource, now = Date.now }) {
+  constructor({
+    domain,
+    authorize,
+    verifySource,
+    mergeronUrl,
+    now = Date.now,
+  }) {
     if (
       !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)
     )
@@ -99,12 +111,21 @@ class PreviewGateway {
     this.domain = domain;
     this.authorize = authorize;
     this.verifySource = verifySource;
+    this.mergeronUrl = safeMergeronUrl(mergeronUrl);
     this.now = now;
     this.tickets = new Map();
     this.sessions = new Map();
     this.sockets = new Set();
     this.server = http.createServer((req, res) => {
-      void this.handle(req, res).catch(() => this.error(res, 403));
+      void this.handle(req, res).catch((error) => {
+        const reason =
+          error instanceof PreviewAccessError
+            ? error.reason
+            : [401, 403].includes(error?.getStatus?.())
+              ? 'permission_denied'
+              : 'unavailable';
+        this.error(res, accessCodes[reason], reason, req);
+      });
     });
     this.server.on('upgrade', (req, socket, head) => {
       void this.upgrade(req, socket, head).catch(() =>
@@ -125,9 +146,9 @@ class PreviewGateway {
       host !== host.toLowerCase() ||
       !host.endsWith('.' + this.domain)
     )
-      throw Error();
+      throw new PreviewAccessError('invalid_request');
     const id = host.slice(0, -this.domain.length - 1);
-    if (!uuid.test(id)) throw Error();
+    if (!uuid.test(id)) throw new PreviewAccessError('invalid_request');
     return { host, id, origin: 'https://' + host };
   }
   prune() {
@@ -147,7 +168,7 @@ class PreviewGateway {
       path.startsWith('//') ||
       /[\r\n#\\]/.test(path)
     )
-      throw Error('PREVIEW_ACCESS_DENIED');
+      throw new PreviewAccessError('permission_denied');
     const verified = await this.authorize(grant);
     if (
       ![
@@ -155,9 +176,9 @@ class PreviewGateway {
         `${grant.runId}.${this.domain}`,
       ].includes(verified.publicHost)
     )
-      throw Error('PREVIEW_IDENTITY_CHANGED');
+      throw new PreviewAccessError('configuration_changed');
     if (this.tickets.size >= 1000 || this.sessions.size >= 2000)
-      throw Error('PREVIEW_SESSION_LIMIT');
+      throw new PreviewAccessError('unavailable');
     const token = randomBytes(32).toString('base64url');
     this.tickets.set(digest(token), {
       ...grant,
@@ -168,22 +189,37 @@ class PreviewGateway {
       expiresAt: this.now() + 60000,
     };
   }
-  error(
-    res,
-    status = 403,
-    text = 'Preview access unavailable. Open the preview from Mergeron.',
-  ) {
+  error(res, status = 503, reason = 'unavailable', req) {
+    if (res.headersSent) {
+      res.destroy?.();
+      return;
+    }
+    const code = Object.hasOwn(accessCodes, reason) ? reason : 'unavailable';
+    const html =
+      req?.headers['sec-fetch-dest'] === 'document' ||
+      String(req?.headers.accept ?? '').includes('text/html');
+    const nonce = randomBytes(16).toString('base64');
     if (!res.headersSent)
       res.writeHead(status, {
-        'content-type': 'text/plain; charset=utf-8',
+        'content-type': html
+          ? 'text/html; charset=utf-8'
+          : 'application/json; charset=utf-8',
         'cache-control': 'no-store',
         'referrer-policy': 'no-referrer',
+        'x-content-type-options': 'nosniff',
+        'x-mergeron-preview-layer': 'mergeron',
+        'x-mergeron-preview-code': code,
+        'content-security-policy': `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`,
       });
-    res.end(text);
+    res.end(
+      html
+        ? accessPage(nonce, { reason: code, mergeronUrl: this.mergeronUrl })
+        : JSON.stringify({ layer: 'mergeron', code }),
+    );
   }
   origin(req, target, upgrade = false) {
     if (req.headers.origin && req.headers.origin !== target.origin)
-      throw Error();
+      throw new PreviewAccessError('origin_denied');
     const site = req.headers['sec-fetch-site'];
     if (
       site &&
@@ -194,13 +230,14 @@ class PreviewGateway {
         req.headers['sec-fetch-dest'] === 'document'
       )
     )
-      throw Error();
-    if (upgrade && req.headers.origin !== target.origin) throw Error();
+      throw new PreviewAccessError('origin_denied');
+    if (upgrade && req.headers.origin !== target.origin)
+      throw new PreviewAccessError('origin_denied');
     if (
       !['GET', 'HEAD'].includes(req.method) &&
       req.headers.origin !== target.origin
     )
-      throw Error();
+      throw new PreviewAccessError('origin_denied');
   }
   bootstrap(res) {
     const nonce = randomBytes(16).toString('base64');
@@ -208,18 +245,14 @@ class PreviewGateway {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store',
       'referrer-policy': 'no-referrer',
-      'content-security-policy': `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`,
       'x-content-type-options': 'nosniff',
+      'x-mergeron-preview-layer': 'mergeron',
+      'x-mergeron-preview-code': 'session_required',
+      'content-security-policy': `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`,
     });
-    res.end(`<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Aperçu Mergeron</title><p id="status">Ouvrez cet aperçu depuis Mergeron pour autoriser l’accès.</p><script nonce="${nonce}">
-      const params = new URLSearchParams(location.hash.slice(1));
-      const token = params.get('mergeron-preview');
-      const path = params.get('path') || '/';
-      const safe = path.startsWith('/') && !path.startsWith('//') && !/[\\\\\\r\\n#]/.test(path);
-      history.replaceState(null, '', safe ? path : '/');
-      if(token) fetch('${SESSION_PATH}', {method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'}, body:JSON.stringify({token})})
-        .then(r => {if(!r.ok) throw Error(); location.reload();}).catch(() => {document.getElementById('status').textContent = 'Autorisation expirée. Rouvrez l’aperçu depuis Mergeron.';});
-      </script></html>`);
+    res.end(
+      accessPage(nonce, { bootstrap: true, mergeronUrl: this.mergeronUrl }),
+    );
   }
   async exchange(req, res, target) {
     this.origin(req, target);
@@ -227,12 +260,17 @@ class PreviewGateway {
       body = '';
     for await (const chunk of req) {
       bytes += chunk.length;
-      if (bytes > 1024) throw Error();
+      if (bytes > 1024) throw new PreviewAccessError('invalid_request');
       body += chunk.toString();
     }
-    const token = JSON.parse(body).token;
+    let token;
+    try {
+      token = JSON.parse(body).token;
+    } catch {
+      throw new PreviewAccessError('invalid_request');
+    }
     if (typeof token !== 'string' || !/^[a-zA-Z0-9_-]{43}$/.test(token))
-      throw Error();
+      throw new PreviewAccessError('invalid_request');
     const key = digest(token),
       grant = this.tickets.get(key);
     this.tickets.delete(key);
@@ -241,9 +279,14 @@ class PreviewGateway {
       ![grant.previewId, grant.runId].includes(target.id) ||
       grant.expiresAt <= this.now()
     )
-      throw Error();
+      throw new PreviewAccessError(
+        grant && grant.expiresAt <= this.now()
+          ? 'session_expired'
+          : 'session_required',
+      );
     const transport = await this.authorize(grant);
-    if (transport.publicHost !== target.host) throw Error();
+    if (transport.publicHost !== target.host)
+      throw new PreviewAccessError('invalid_request');
     const session = randomBytes(32).toString('base64url'),
       expiresAt = Math.min(this.now() + 30 * 60000, transport.expiresAt);
     this.sessions.set(digest(session), { ...grant, expiresAt });
@@ -255,9 +298,15 @@ class PreviewGateway {
   }
   async access(req, target) {
     this.origin(req, target);
-    this.prune();
     const token = cookieMap(req.headers.cookie).get(COOKIE);
     const grant = token && this.sessions.get(digest(token));
+    this.prune();
+    if (
+      grant &&
+      [grant.previewId, grant.runId].includes(target.id) &&
+      grant.expiresAt <= this.now()
+    )
+      throw new PreviewAccessError('session_expired');
     if (
       !grant ||
       ![grant.previewId, grant.runId].includes(target.id) ||
@@ -273,7 +322,7 @@ class PreviewGateway {
       !/^[a-f0-9]{64}$/.test(transport.token) ||
       transport.publicHost !== target.host
     )
-      throw Error();
+      throw new PreviewAccessError('environment_unavailable');
     return { grant, transport, url };
   }
   headers(req, target, access, upgrade = false) {
@@ -295,6 +344,7 @@ class PreviewGateway {
   responseHeaders(headers, runId) {
     const h = clean(headers);
     h['cache-control'] = 'no-store';
+    h['x-mergeron-preview-layer'] = 'application';
     h['referrer-policy'] = 'no-referrer';
     h['x-content-type-options'] = 'nosniff';
     // A preview cannot mint parent-domain cookies or capture the gateway cookie.
@@ -310,8 +360,9 @@ class PreviewGateway {
     // A worker must not persist past a stopped run and intercept future grants
     // on the stable agent origin. Ordinary application Web Workers are unaffected.
     if (req.headers['service-worker'] !== undefined)
-      return this.error(res, 403);
-    if (!req.url.startsWith('/') || req.url.startsWith('//')) throw Error();
+      return this.error(res, 403, 'origin_denied', req);
+    if (!req.url.startsWith('/') || req.url.startsWith('//'))
+      throw new PreviewAccessError('invalid_request');
     if (req.url === '/.__mergeron_preview/open' && req.method === 'GET')
       return this.bootstrap(res);
     if (req.url === SESSION_PATH && req.method === 'POST')
@@ -320,10 +371,31 @@ class PreviewGateway {
       req.method === 'GET' &&
       (req.url === '/.__mergeron_preview/receipt' ||
         req.url === '/.__mergeron_preview/vite-plugin.mjs' ||
+        req.url === '/.__mergeron_preview/access' ||
         req.url.startsWith('/.__mergeron_preview/verify?'))
     ) {
       const access = await this.access(req, target);
-      if (!access) return this.error(res, 401);
+      if (!access) return this.error(res, 401, 'session_required', req);
+      if (req.url === '/.__mergeron_preview/access') {
+        res.writeHead(200, {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': 'no-store',
+          'x-mergeron-preview-layer': 'mergeron',
+          'x-content-type-options': 'nosniff',
+        });
+        return res.end(
+          JSON.stringify({
+            mergeron: {
+              state: 'authorized',
+              expiresAt: Math.min(
+                access.grant.expiresAt,
+                access.transport.expiresAt,
+              ),
+            },
+            application: { state: 'unknown' },
+          }),
+        );
+      }
       if (req.url === '/.__mergeron_preview/vite-plugin.mjs') {
         res.writeHead(200, {
           'content-type': 'text/javascript; charset=utf-8',
@@ -369,15 +441,15 @@ class PreviewGateway {
               ),
               sourceCurrent,
             })
-          : verificationPage(nonce),
+          : verificationPage(nonce, this.mergeronUrl),
       );
     }
     if (req.url.startsWith('/.__mergeron_preview/'))
-      return this.error(res, 404);
+      return this.error(res, 404, 'invalid_request', req);
     const access = await this.access(req, target);
     if (!access) {
       if (req.method === 'GET') return this.bootstrap(res);
-      return this.error(res, 401);
+      return this.error(res, 401, 'session_required', req);
     }
     const upstream = http.request(
       {
@@ -398,11 +470,7 @@ class PreviewGateway {
     );
     upstream.on('timeout', () => upstream.destroy());
     upstream.on('error', () =>
-      this.error(
-        res,
-        502,
-        'The preview application is starting or unavailable.',
-      ),
+      this.error(res, 502, 'upstream_unavailable', req),
     );
     req.on('aborted', () => upstream.destroy());
     res.on('close', () => upstream.destroy());
@@ -487,4 +555,10 @@ class PreviewGateway {
       await new Promise((resolve) => this.server.close(resolve));
   }
 }
-module.exports = { PreviewGateway, appCookies, appSetCookie, clean };
+module.exports = {
+  PreviewAccessError,
+  PreviewGateway,
+  appCookies,
+  appSetCookie,
+  clean,
+};

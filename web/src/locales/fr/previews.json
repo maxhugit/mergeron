@@ -53,7 +53,7 @@
   "memory": "Mémoire maximale de l’application (Mio)",
   "storageTitle": "Stockage du runtime",
   "storageLimits": "Stockage temporaire borné : sources et compilation {{workspace}} Mio · caches {{cache}} Mio · temporaire {{temporary}} Mio · données {{data}} Mio.",
-  "storageMemoryHelp": "Ces volumes tmpfs consomment la RAM du runtime, en plus des processus. Les caches sont dans /cache, hors des sources. Aucun quota disque utilisateur n’est configuré. Le précontrôle du terminal de l’agent ne mesure pas ces volumes.",
+  "storageMemoryHelp": "Ces volumes tmpfs utilisent la mémoire : leurs pages peuvent être imputées au cgroup du runtime. Leur occupation ne doit pas être ajoutée à sa charge totale. Les caches sont dans /cache. Aucun quota disque utilisateur n’est configuré ; le précontrôle du terminal de l’agent ne mesure pas ces volumes.",
   "storageAvailable": "{{mib}} Mio disponibles · inodes disponibles : {{inodes}}",
   "storageSpaceExhausted": "limite d’espace du volume atteinte",
   "storageInodesExhausted": "inodes épuisés",
@@ -180,5 +180,20 @@
     "unknown": "Non vérifié",
     "missing": "Reçu indisponible. Une ancienne instance ou un Manager incompatible ne permet pas de confirmer la génération.",
     "open": "Vérifier dans le navigateur"
+  },
+  "runtimeDiagnostics": {
+    "title": "Exécution et causes d’arrêt",
+    "execution": "Runtime : {{runtime}} · NODE_ENV : {{nodeEnv}} · Dossier : {{directory}} · Mise à jour : {{updateMode}}",
+    "legacy": "Métadonnées de lancement inconnues pour cet environnement existant. Elles seront enregistrées à la prochaine recréation.",
+    "exit": "Code de sortie : {{exitCode}} · Observation : {{date}}",
+    "help": "Les commandes d’installation, compilation et lancement partagent le même shell. Les exports d’une commande d’agent séparée ne persistent pas. Utilisez la recette pour les variables et le cycle de vie du serveur. Le runtime indiqué est celui du catalogue ; les versions effectives sont à contrôler dans le terminal.",
+    "stopHelp": "137 seul ne prouve pas un manque de RAM. Un volume plein est une cause distincte. Les relevés d’un environnement arrêté sont historiques ; arrêt, expiration et recréation suppriment ses volumes temporaires.",
+    "causes": {
+      "memoryLimit": "Docker confirme un arrêt par manque de mémoire (OOM).",
+      "processExit": "Le processus du site s’est terminé. Consultez son code de sortie et ses logs.",
+      "startupTimeout": "Délai de démarrage dépassé : le serveur a été arrêté.",
+      "expired": "L’environnement a atteint sa durée de vie et a été arrêté.",
+      "userStop": "Arrêt demandé depuis Mergeron."
+    }
   }
 }

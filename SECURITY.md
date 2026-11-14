@@ -157,3 +157,16 @@ aucune autorisation générale Azure Blob n’est ajoutée. Les contenus sont bo
 non conservés et marqués non fiables. Le masquage du jeton de connexion connu
 et des formats usuels de jetons ne peut pas détecter tout secret arbitraire
 qu’un workflow imprimerait : les auteurs doivent préserver le masquage GitHub.
+
+## Diagnostics des previews
+
+Le gateway distingue ses refus des réponses de l’application par des codes
+limités et des en-têtes réservés, retirés des réponses amont. Le diagnostic
+Mergeron indique l’expiration du droit personnel ; une requête HEAD au site ne
+prouve jamais un rôle connecté. Les pages d’erreur ne reflètent ni erreur brute,
+ni secret, et le lien de retour provient uniquement de l’URL HTTPS canonique.
+Les cookies des deux couches restent séparés. Le diagnostic de lancement et
+d’arrêt exige les droits habituels sur le projet et l’agent, projette des champs
+explicites et n’exécute aucun programme du projet. Les compteurs Docker et le
+helper de volumes sont distincts des logs applicatifs non fiables ; un code
+137 ne suffit pas à confirmer un OOM. Les limites de ressources sont conservées.

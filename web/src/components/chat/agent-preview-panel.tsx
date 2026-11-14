@@ -1,3 +1,4 @@
+import { PreviewRuntimeDiagnostics } from '../projects/preview-runtime-diagnostics';
 import { PreviewReceiptSummary } from '../projects/preview-receipt-summary';
 import { lazy, Suspense, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -398,9 +399,13 @@ export function AgentPreviewPanel({
             lifetime.error?.message ||
             (preview?.error === 'PREVIEW_STARTUP_TIMEOUT'
               ? t('startupTimeout')
-              : preview?.error === 'PREVIEW_NOT_FOUND'
-                ? t('missingRun')
-                : preview?.error) ||
+              : preview?.error === 'PREVIEW_MEMORY_LIMIT'
+                ? t('runtimeDiagnostics.causes.memoryLimit')
+                : preview?.error === 'PREVIEW_PROCESS_EXITED'
+                  ? t('runtimeDiagnostics.causes.processExit')
+                  : preview?.error === 'PREVIEW_NOT_FOUND'
+                    ? t('missingRun')
+                    : preview?.error) ||
             t('unavailable')}
         </p>
       )}
@@ -409,36 +414,48 @@ export function AgentPreviewPanel({
           {notice}
         </p>
       )}
-      {preview && (
-        <div className="shrink-0 px-3 py-1">
-          <PreviewReceiptSummary
-            receipt={preview.receipt}
+      <div className="max-h-[20%] shrink-0 overflow-y-auto overscroll-contain">
+        {preview && (
+          <div className="shrink-0 px-3 py-1">
+            <PreviewReceiptSummary
+              receipt={preview.receipt}
+              projectId={projectId}
+              threadId={threadId}
+              address={preview.url}
+              disabled={!running || !preview.ready || query.isError}
+            />
+          </div>
+        )}
+        {active && runId && (
+          <PreviewRuntimeDiagnostics
             projectId={projectId}
             threadId={threadId}
-            address={preview.url}
-            disabled={!running || !preview.ready || query.isError}
+            runId={runId}
           />
-        </div>
-      )}
-      {item?.memory && (
-        <details className="shrink-0 border-b px-3 py-2 text-xs">
-          <summary>{t('memoryDiagnostics.title')}</summary>
-          <p>
-            {t(
-              'memoryDiagnostics.sample',
-              Object.fromEntries(
-                Object.entries(item.memory).map(([k, v]) => [
-                  k,
-                  typeof v === 'number' ? (v / 1024 ** 2).toFixed(1) : '—',
-                ]),
-              ),
+        )}
+        {item?.memory && (
+          <details className="shrink-0 border-b px-3 py-2 text-xs">
+            <summary>{t('memoryDiagnostics.title')}</summary>
+            <p>
+              {t(
+                'memoryDiagnostics.sample',
+                Object.fromEntries(
+                  Object.entries(item.memory).map(([k, v]) => [
+                    k,
+                    typeof v === 'number' ? (v / 1024 ** 2).toFixed(1) : '—',
+                  ]),
+                ),
+              )}
+            </p>
+            {item.memory.oomKilled && (
+              <p role="status">{t('runtimeDiagnostics.causes.memoryLimit')}</p>
             )}
-          </p>
-          <p className="text-muted-foreground">
-            {t('memoryDiagnostics.explanation')}
-          </p>
-        </details>
-      )}
+            <p className="text-muted-foreground">
+              {t('memoryDiagnostics.explanation')}
+            </p>
+          </details>
+        )}
+      </div>
       <div className="max-h-[45%] shrink-0 overflow-y-auto px-3">
         <PreviewPrerequisites
           reasons={prerequisites.data?.missingConfiguration ?? []}

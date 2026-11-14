@@ -53,7 +53,7 @@
   "memory": "Application memory limit (MiB)",
   "storageTitle": "Runtime storage",
   "storageLimits": "Bounded ephemeral storage: sources and builds {{workspace}} MiB · caches {{cache}} MiB · temporary {{temporary}} MiB · data {{data}} MiB.",
-  "storageMemoryHelp": "These tmpfs volumes consume runtime RAM in addition to its processes. Caches live in /cache, outside the sources. No per-user disk quota is configured. The agent terminal preflight does not measure these volumes.",
+  "storageMemoryHelp": "These tmpfs volumes use memory: their pages may be charged to the runtime cgroup. Do not add their occupied bytes to its total memory usage. Caches live in /cache. No user disk quota is configured; the agent terminal preflight does not measure these volumes.",
   "storageAvailable": "{{mib}} MiB available · available inodes: {{inodes}}",
   "storageSpaceExhausted": "volume space limit reached",
   "storageInodesExhausted": "inodes exhausted",
@@ -180,5 +180,20 @@
     "unknown": "Not verified",
     "missing": "Receipt unavailable. An older instance or incompatible Manager cannot confirm the generation.",
     "open": "Verify in the browser"
+  },
+  "runtimeDiagnostics": {
+    "title": "Execution and stop causes",
+    "execution": "Runtime: {{runtime}} · NODE_ENV: {{nodeEnv}} · Directory: {{directory}} · Updates: {{updateMode}}",
+    "legacy": "Launch metadata is unknown for this existing environment. It will be recorded at the next recreation.",
+    "exit": "Exit code: {{exitCode}} · Observed: {{date}}",
+    "help": "Install, build and launch commands share one shell. Exports in separate agent commands do not persist. Use the recipe for variables and server lifecycle. The runtime is the catalog entry; check effective versions in the terminal.",
+    "stopHelp": "137 alone does not prove memory exhaustion. A full volume is a separate cause. Stopped environment measurements are historical; stopping, expiry and recreation remove its temporary volumes.",
+    "causes": {
+      "memoryLimit": "Docker confirms an out-of-memory termination (OOM).",
+      "processExit": "The site process exited. Check its exit code and logs.",
+      "startupTimeout": "Startup deadline exceeded: the server was stopped.",
+      "expired": "The environment reached its lifetime and was stopped.",
+      "userStop": "Stop requested from Mergeron."
+    }
   }
 }

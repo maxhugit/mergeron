@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import gatewayModule from '../runtime/preview-gateway.cjs';
-const { PreviewGateway } = gatewayModule;
+const { PreviewGateway, PreviewAccessError } = gatewayModule;
 const previewId = '11111111-1111-4111-8111-111111111111',
   runId = '22222222-2222-4222-8222-222222222222';
 const host = previewId + '.preview.fixture.test',
@@ -56,11 +56,17 @@ try {
     ],
     { stdio: 'ignore' },
   );
+  let siteStatus = 200,
+    clockOffset = 0;
   // The internal container address is mapped to a fixture listener only in this harness.
   app = http.createServer((req, res) => {
     assert.equal(req.headers['x-mergeron-preview-transport'], 'd'.repeat(64));
     assert.equal(req.headers.cookie, undefined); // Gateway grants never reach the app.
     res.setHeader('cache-control', 'no-store');
+    if (req.method === 'HEAD') {
+      res.writeHead(siteStatus, { 'x-mergeron-preview-layer': 'mergeron' });
+      return res.end();
+    }
     if (req.url.startsWith('/style.css')) {
       res.setHeader('content-type', 'text/css');
       res.end(
@@ -84,14 +90,16 @@ try {
     );
   gateway = new PreviewGateway({
     domain: 'preview.fixture.test',
+    now: () => Date.now() + clockOffset,
+    mergeronUrl: 'https://mergeron.example.org/projects/fixture',
     verifySource: async () => sourceCurrent,
     authorize: async () => {
-      if (!allowed) throw Error('revoked');
+      if (!allowed) throw new PreviewAccessError('permission_denied');
       return {
         endpoint: `http://pv-${runId.replaceAll('-', '')}-relay:8180`,
         token: 'd'.repeat(64),
         publicHost: host,
-        expiresAt: Date.now() + 600000,
+        expiresAt: Date.now() + 3600000,
         receipt: { ...base, generation },
         syncError: null,
       };
@@ -165,6 +173,23 @@ try {
     () => document.querySelector('#result')?.dataset.state === 'current',
   );
   assert.equal(new URL(page.url()).hash, '');
+  for (const status of [401, 403, 200]) {
+    siteStatus = status;
+    await page.locator('#check').click();
+    await page.waitForFunction(
+      () => document.querySelector('#result')?.dataset.state === 'current',
+    );
+    await page.waitForFunction((status) => {
+      const text = document.querySelector('#site-access').textContent;
+      return status === 200
+        ? /unknown|inconnue/i.test(text)
+        : text.includes(String(status));
+    }, status);
+    assert.match(
+      await page.locator('#mergeron-access').textContent(),
+      /Authorized|Autorisée/,
+    );
+  }
   sourceCurrent = false;
   await page.locator('#check').click();
   await page.waitForFunction(
@@ -220,6 +245,12 @@ try {
     () => document.querySelector('#result')?.dataset.state === 'unknown',
   );
   allowed = false;
+  await page.locator('#check').click();
+  await page.waitForFunction(
+    () => document.querySelector('#result')?.dataset.state === 'accessDenied',
+  );
+  allowed = true;
+  clockOffset = 1800001;
   await page.locator('#check').click();
   await page.waitForFunction(
     () => document.querySelector('#result')?.dataset.state === 'accessExpired',

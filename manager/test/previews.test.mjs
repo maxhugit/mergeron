@@ -1092,3 +1092,60 @@ test('an older helper cannot acknowledge a new receipt merely by exiting success
   );
   assert.equal(f.manager.records.get(f.input.runId).receipt, undefined);
 });
+
+test('termination evidence survives cleanup and exit 137 is not invented as OOM', async () => {
+  const f = await fixture();
+  await f.manager.start(f.input);
+  const runtime = f.docker.created.find(
+    (c) => c.Config.Labels['io.mergeron.component'] === 'preview-app',
+  );
+  assert.ok(runtime.Config.Env.includes('NODE_ENV=development'));
+  assert.equal(
+    runtime.Config.Env.filter((s) => s.startsWith('NODE_ENV=')).length,
+    1,
+  );
+  runtime.State = {
+    Running: false,
+    OOMKilled: false,
+    ExitCode: 137,
+    FinishedAt: new Date().toISOString(),
+  };
+  const failed = await f.manager.status(f.input.runId);
+  assert.equal(failed.termination.cause, 'process_exit');
+  assert.equal(failed.termination.exitCode, 137);
+  assert.equal(failed.termination.oomKilled, false);
+  const stopped = await f.manager.stop(f.input.runId);
+  assert.deepEqual(stopped.termination, failed.termination);
+  assert.equal(stopped.cleanupComplete, true);
+});
+test('requested stop and expiry retain distinct causes and explicit recipe mode wins once', async () => {
+  const f = await fixture();
+  f.input.profile.env = { NODE_ENV: 'production' };
+  await f.manager.start(f.input);
+  const runtime = f.docker.created.find(
+    (c) => c.Config.Labels['io.mergeron.component'] === 'preview-app',
+  );
+  assert.deepEqual(
+    runtime.Config.Env.filter((s) => s.startsWith('NODE_ENV=')),
+    ['NODE_ENV=production'],
+  );
+  assert.equal(
+    (await f.manager.status(f.input.runId)).execution.nodeEnv,
+    'production',
+  );
+  f.manager.records.get(f.input.runId).expiresAt = Date.now() - 1;
+  assert.equal(
+    (await f.manager.status(f.input.runId)).termination.cause,
+    'expired',
+  );
+  assert.equal(
+    (await f.manager.stop(f.input.runId)).termination.cause,
+    'expired',
+  );
+  const other = await fixture();
+  await other.manager.start(other.input);
+  assert.equal(
+    (await other.manager.stop(other.input.runId)).termination.cause,
+    'user_stop',
+  );
+});

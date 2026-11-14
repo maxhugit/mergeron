@@ -21,10 +21,35 @@ const api = vi.hoisted(() => ({
   running: true,
   admin: true,
   startupTimeout: false,
+  terminated: false,
   missing: [] as string[],
   prerequisitesFailed: false,
   recipeRequired: false,
   showSources: false,
+}));
+vi.mock('@/generated/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/generated/api')>()),
+  previewsDiagnostics: async () => ({
+    data: {
+      runId: 'synthetic-run',
+      state: 'running',
+      execution: {
+        runtime: 'node',
+        nodeEnv: 'development',
+        directory: '.',
+        updateMode: 'hot',
+      },
+      termination: api.terminated
+        ? {
+            cause: 'process_exit',
+            exitCode: 137,
+            oomKilled: false,
+            observedAt: 1234567890000,
+            finishedAt: null,
+          }
+        : null,
+    },
+  }),
 }));
 vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => ({ isAdministrator: api.admin }),
@@ -167,6 +192,7 @@ beforeEach(async () => {
   api.running = true;
   api.admin = true;
   api.startupTimeout = false;
+  api.terminated = false;
   api.missing = [];
   api.prerequisitesFailed = false;
   api.recipeRequired = false;
@@ -459,3 +485,23 @@ test.each([1180, 390])(
     });
   },
 );
+
+for (const width of [1180, 390])
+  test(`execution and exit diagnostics remain readable at ${width}px`, async () => {
+    api.terminated = true;
+    await page.viewport(width, 800);
+    mount();
+    await screen.findByRole('button', { name: /Application/ });
+    fireEvent.click(screen.getByText('Exécution et causes d’arrêt'));
+    expect(await screen.findByText(/Code de sortie : 137/)).toBeVisible();
+    expect(screen.getByText(/137 seul ne prouve/)).toBeVisible();
+    expect(screen.getByText(/NODE_ENV : development/)).toBeVisible();
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    );
+    const logs = await screen.findByLabelText('Logs');
+    expect(logs.clientHeight).toBeGreaterThan(60);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/preview-diagnostics-${width}.png`,
+    });
+  });

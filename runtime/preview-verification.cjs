@@ -1,9 +1,25 @@
 'use strict';
+const { safeMergeronUrl } = require('./preview-access.cjs');
 /** Runs on the dedicated preview origin, with its existing HttpOnly grant. */
 function verificationBrowser() {
   const french = navigator.language.startsWith('fr');
   const labels = french
     ? {
+        mergeronAccess: 'Autorisation Mergeron',
+        siteAccess: 'Session du site',
+        authorized: 'Autorisée jusqu’au',
+        siteUnknown:
+          'Session inconnue : une réponse HTTP ne prouve pas une connexion membre ou administrateur.',
+        siteLogin: 'Le site demande sa propre authentification (HTTP 401).',
+        siteDenied:
+          'Le site refuse cette requête (HTTP 403). Vérifiez les droits dans le site.',
+        reopen: 'Rouvrir depuis Mergeron',
+        accessDenied:
+          'Accès refusé par Mergeron. Vérifiez vos droits sur le projet.',
+        accessUnavailable:
+          'Vérification Mergeron indisponible ou environnement arrêté. Consultez son état dans Mergeron.',
+        accessChanged:
+          'La configuration de la preview a changé. Rouvrez depuis Mergeron.',
         details: 'Relevés techniques',
         hmrApplied: 'CSS actualisé par hot reload ; document HTML conservé',
         downloadAdapter: 'Télécharger l’intégration Vite',
@@ -34,7 +50,7 @@ function verificationBrowser() {
         unavailable:
           'Diagnostic indisponible : la page ou une étape de vérification ne répond pas.',
         accessExpired:
-          'Accès Mergeron à la preview expiré ou refusé. Rouvrez depuis Mergeron.',
+          'Autorisation Mergeron absente, invalide ou expirée. Rouvrez depuis Mergeron.',
         frameUnavailable:
           'Page inaccessible au diagnostic : session du site ou protection contre l’intégration à vérifier.',
         current: 'Marqueurs HTML et CSS concordants',
@@ -58,6 +74,20 @@ function verificationBrowser() {
           'Une copie reçue ou une réponse HTTP 200 ne prouve pas une recompilation. Les marqueurs doivent être produits par la compilation de l’application.',
       }
     : {
+        mergeronAccess: 'Mergeron authorization',
+        siteAccess: 'Site session',
+        authorized: 'Authorized until',
+        siteUnknown:
+          'Session unknown: an HTTP response does not prove a member or administrator login.',
+        siteLogin: 'The site requires its own authentication (HTTP 401).',
+        siteDenied:
+          'The site denied this request (HTTP 403). Check permissions in the site.',
+        reopen: 'Reopen from Mergeron',
+        accessDenied: 'Mergeron denied access. Check your project permissions.',
+        accessUnavailable:
+          'Mergeron verification is unavailable or the environment is stopped. Check its state in Mergeron.',
+        accessChanged:
+          'The preview configuration changed. Reopen from Mergeron.',
         details: 'Technical observations',
         hmrApplied: 'CSS updated through hot reload; HTML document preserved',
         downloadAdapter: 'Download the Vite integration',
@@ -87,7 +117,7 @@ function verificationBrowser() {
         unavailable:
           'Diagnostic unavailable: the page or a verification step is not responding.',
         accessExpired:
-          'Mergeron preview access expired or denied. Reopen from Mergeron.',
+          'Mergeron preview authorization is missing, invalid or expired. Reopen from Mergeron.',
         frameUnavailable:
           'The diagnostic cannot inspect the page: check the site session or framing protection.',
         current: 'HTML and CSS markers match',
@@ -210,8 +240,25 @@ function verificationBrowser() {
       ),
       (v) => v.toString(16).padStart(2, '0'),
     ).join('');
+  function accessFailure(response) {
+    if (
+      response.headers.get('x-mergeron-preview-layer') !== 'mergeron' ||
+      response.ok
+    )
+      return;
+    const code = response.headers.get('x-mergeron-preview-code');
+    const state = ['session_required', 'session_expired'].includes(code)
+      ? 'accessExpired'
+      : ['permission_denied', 'origin_denied'].includes(code)
+        ? 'accessDenied'
+        : code === 'configuration_changed'
+          ? 'accessChanged'
+          : 'accessUnavailable';
+    byId('mergeron-access').textContent = labels[state];
+    throw Error(state);
+  }
   async function boundedText(response) {
-    if ([401, 403].includes(response.status)) throw Error('PREVIEW_ACCESS');
+    accessFailure(response);
     if (!response.ok || !response.body) throw Error();
     const reader = response.body.getReader();
     let size = 0,
@@ -238,6 +285,8 @@ function verificationBrowser() {
     output.dataset.state = 'checking';
     byId('observations').textContent = '';
     resetChain();
+    byId('mergeron-access').textContent = labels.checking;
+    byId('site-access').textContent = labels.siteUnknown;
     const abort = new AbortController(),
       timer = setTimeout(() => abort.abort(), 8000);
     const fetchOptions = {
@@ -247,6 +296,38 @@ function verificationBrowser() {
       signal: abort.signal,
     };
     try {
+      const access = JSON.parse(
+        await boundedText(
+          await fetch('/.__mergeron_preview/access', fetchOptions),
+        ),
+      );
+      if (
+        access.mergeron?.state !== 'authorized' ||
+        !Number.isSafeInteger(access.mergeron.expiresAt)
+      )
+        throw Error();
+      byId('mergeron-access').textContent =
+        labels.authorized +
+        ' ' +
+        new Date(access.mergeron.expiresAt).toLocaleString();
+      // A site response is an observation, never proof of a logged-in role.
+      try {
+        const site = await fetch(path, {
+          ...fetchOptions,
+          method: 'HEAD',
+          redirect: 'manual',
+        });
+        accessFailure(site);
+        if (site.headers.get('x-mergeron-preview-layer') === 'application')
+          byId('site-access').textContent =
+            site.status === 401
+              ? labels.siteLogin
+              : site.status === 403
+                ? labels.siteDenied
+                : labels.siteUnknown;
+      } catch (error) {
+        if (error.message.startsWith('access')) throw error;
+      }
       const evidence = JSON.parse(
         await boundedText(
           await fetch('/.__mergeron_preview/receipt', fetchOptions),
@@ -432,12 +513,16 @@ function verificationBrowser() {
       output.textContent = labels[state] + '\n' + details.join('\n');
     } catch (error) {
       resetChain();
-      const state =
-        error.message === 'PREVIEW_ACCESS'
-          ? 'accessExpired'
-          : error.message === 'PREVIEW_FRAME'
-            ? 'frameUnavailable'
-            : 'unavailable';
+      const state = [
+        'accessExpired',
+        'accessDenied',
+        'accessChanged',
+        'accessUnavailable',
+      ].includes(error.message)
+        ? error.message
+        : error.message === 'PREVIEW_FRAME'
+          ? 'frameUnavailable'
+          : 'unavailable';
       output.dataset.state = state;
       output.textContent = labels[state];
     } finally {
@@ -474,13 +559,23 @@ function verificationBrowser() {
   resetChain();
   frame.src = path;
 }
-function verificationPage(nonce) {
+function verificationPage(nonce, mergeronUrl) {
+  const link = safeMergeronUrl(mergeronUrl);
   return (
     '<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Preview</title>' +
     '<style nonce="' +
     nonce +
     '">body{font:14px system-ui;margin:16px;color:#17202a;background:#f8fafc}h1{font-size:20px}button,input{font:inherit;padding:8px;margin:4px 8px 4px 0}label{display:inline-block}input{max-width:85vw}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;background:white;border:1px solid #ccd5df;max-height:360px;overflow:auto}iframe{width:100%;height:60vh;border:1px solid #ccd5df}summary,button{cursor:pointer}</style>' +
-    '<h1 data-label="title"></h1><p data-label="help"></p><button id="check" data-label="check"></button><button id="reload" data-label="reload"></button>' +
+    '<h1 data-label="title"></h1><p data-label="help"></p><section><h2 data-label="mergeronAccess"></h2><p id="mergeron-access" role="status"></p>' +
+    (link
+      ? '<a data-label="reopen" rel="noopener noreferrer" href="' +
+        link
+          .replaceAll('&', '&amp;')
+          .replaceAll('"', '&quot;')
+          .replaceAll('<', '&lt;') +
+        '"></a>'
+      : '') +
+    '<h2 data-label="siteAccess"></h2><p id="site-access" role="status"></p></section><button id="check" data-label="check"></button><button id="reload" data-label="reload"></button>' +
     '<details><summary data-label="expected"></summary><label><span data-label="selector"></span><br><input id="selector" placeholder="#example"></label><label><span data-label="property"></span><br><input id="property" placeholder="width"></label><label><span data-label="value"></span><br><input id="expected" placeholder="32px"></label></details>' +
     '<section aria-labelledby="chain-title"><h2 id="chain-title" data-label="chain"></h2><p data-label="monitorHelp"></p><p><a href="/.__mergeron_preview/vite-plugin.mjs" download="preview-vite-plugin.mjs" data-label="downloadAdapter"></a></p><button id="monitor" data-label="monitor"></button><dl>' +
     ['source', 'detection', 'socket', 'applied', 'build']
