@@ -18,8 +18,21 @@ import type { PreviewProfile } from '../../../../runtime/preview-profile.cjs';
 const fixture = vi.hoisted(() => ({
   calls: [] as { path: string; body: Record<string, unknown> }[],
   failSave: false,
+  executionBlocked: false,
   missing: false,
   revision: 'policy:recipe:source',
+}));
+vi.mock('@/generated/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/generated/api')>()),
+  previewsDiagnostics: async () => ({
+    data: {
+      runId: 'old',
+      state: 'stopped',
+      runtimeVersions: null,
+      execution: null,
+      termination: null,
+    },
+  }),
 }));
 vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => ({ isAdministrator: true }),
@@ -83,6 +96,15 @@ vi.mock('@/lib/projects-api', () => ({
       }
       return {
         profile,
+        executionCheck: {
+          valid: !fixture.executionBlocked,
+          mode: 'development',
+          port: 3000,
+          kind: 'custom',
+          issues: fixture.executionBlocked
+            ? [{ code: 'portConflict', severity: 'error' }]
+            : [{ code: 'commandUnknown', severity: 'warning' }],
+        },
         policyRevision: 'policy',
         recipeRevision: 'recipe',
         revision: fixture.revision,
@@ -118,6 +140,7 @@ beforeEach(async () => {
   await i18n.changeLanguage('fr');
   fixture.calls = [];
   fixture.failSave = false;
+  fixture.executionBlocked = false;
   fixture.missing = false;
   fixture.revision = 'policy:recipe:source';
   client = new QueryClient({
@@ -264,3 +287,31 @@ test('a rejected recipe save keeps the draft and displays the stop prerequisite'
   );
   expect((command as HTMLTextAreaElement).value).toBe('node edited.js');
 });
+
+for (const width of [390, 1100])
+  test(`a launch conflict is explained and cannot be confirmed at ${width}px`, async () => {
+    await page.viewport(width, 900);
+    fixture.missing = true;
+    fixture.executionBlocked = true;
+    render(
+      <QueryClientProvider client={client}>
+        <div className="h-screen">
+          <AgentPreviewPanel projectId="project" threadId="agent" active />
+        </div>
+      </QueryClientProvider>,
+    );
+    const launch = await screen.findByRole('button', { name: 'Démarrer' });
+    await waitFor(() => expect(launch).toBeEnabled());
+    fireEvent.click(launch);
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText(/PORT contredit/)).toBeVisible();
+    expect(
+      within(dialog).getByRole('button', { name: 'Confirmer le démarrage' }),
+    ).toBeDisabled();
+    expect(fixture.calls.some((c) => c.path.endsWith('/start'))).toBe(false);
+    expect(dialog.scrollWidth).toBeLessThanOrEqual(dialog.clientWidth + 1);
+    await expect.poll(() => getComputedStyle(dialog).opacity).toBe('1');
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/execution-check-${width}.png`,
+    });
+  });

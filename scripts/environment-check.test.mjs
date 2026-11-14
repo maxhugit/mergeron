@@ -15,6 +15,7 @@ import { join, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import {
   cacheKeys,
+  currentNamespaces,
   command,
   curlEnvironment,
   errorCode,
@@ -551,3 +552,23 @@ test('launcher recovers from a missing Node PATH and an inherited production mod
     assert.equal(invalid.stdout, '');
     assert.equal(invalid.stderr.includes('invalid-secret-value'), false);
   }));
+
+test('namespace observations use only fixed proc links and never disclose unexpected values', async () => {
+  const paths = [];
+  const report = await currentNamespaces('linux', async (path) => {
+    paths.push(path);
+    return path.endsWith('/pid') ? 'pid:[1234]' : 'net:[5678]';
+  });
+  assert.deepEqual(report, { pid: 'pid:[1234]', network: 'net:[5678]' });
+  assert.deepEqual(paths, ['/proc/self/ns/pid', '/proc/self/ns/net']);
+  assert.deepEqual(
+    await currentNamespaces('linux', async () => '/private/secret'),
+    { pid: null, network: null },
+  );
+  assert.deepEqual(
+    await currentNamespaces('darwin', async () => {
+      throw Error('must not read Linux proc');
+    }),
+    { pid: null, network: null },
+  );
+});

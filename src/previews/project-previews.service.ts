@@ -1,3 +1,4 @@
+import { executionCheck } from '../../runtime/preview-execution.cjs';
 import { previewDiagnostics } from './preview-diagnostics.dto';
 import { ThreadDeletionRegistryService } from '../thread-deletion/thread-deletion-registry.service';
 import {
@@ -1109,6 +1110,7 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       : approved;
     return {
       profile: profile ? contract.safeProfile(profile) : null,
+      executionCheck: profile ? executionCheck(profile) : null,
       policyRevision: policy.revision,
       recipeRevision: stored?.revision ?? null,
       revision: profile
@@ -1628,6 +1630,8 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
       }
       if (!profile.enabled || !profile.start.trim())
         throw new ConflictException('PREVIEW_DISABLED');
+      if (!executionCheck(profile).valid)
+        throw new ConflictException('PREVIEW_EXECUTION_CONFLICT');
       const check = () => {
         if (this.scope(projectId, threadId).agentId !== scope.agentId)
           throw new ForbiddenException('PREVIEW_IDENTITY_CHANGED');

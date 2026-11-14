@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { lookup } from 'node:dns/promises';
-import { mkdtemp, mkdir, open, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, open, readFile, readlink, rm } from 'node:fs/promises';
 import { createServer, createConnection } from 'node:net';
 import { networkInterfaces, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -18,6 +18,32 @@ using curl's existing proxy/TLS settings. No install, project script or permissi
 change is performed. Temporary probes are removed; no report is saved by default.
 This checks capabilities, not the application's rendering or registry access.
 `;
+
+/** Fixed non-sensitive Linux namespace identities; unavailable is unknown, never simulated. */
+export async function currentNamespaces(
+  platform = process.platform,
+  reader = readlink,
+) {
+  const result = { pid: null, network: null };
+  if (platform !== 'linux') return result;
+  for (const [key, name] of [
+    ['pid', 'pid'],
+    ['network', 'net'],
+  ]) {
+    try {
+      const value = await reader('/proc/self/ns/' + name);
+      if (
+        typeof value === 'string' &&
+        value.length <= 64 &&
+        new RegExp('^' + name + ':\\[\\d+\\]$').test(value)
+      )
+        result[key] = value;
+    } catch {
+      /* The existing sandbox may intentionally hide proc metadata. */
+    }
+  }
+  return result;
+}
 
 export const cacheKeys = [
   'XDG_CACHE_HOME',
@@ -528,6 +554,15 @@ export async function run(options, deps = {}) {
           : 'external',
       server:
         'Use the managed preview lifecycle; shell exports do not persist between separate commands.',
+      namespaces: await currentNamespaces(),
+      contexts: {
+        agent:
+          'Command-local environment; PID namespace follows this agent session. Loopback uses its existing network sandbox.',
+        preview:
+          'Separate private container network and processes; use this preview container terminal for loopback tests from later calls. Project source synchronization does not share processes.',
+        public:
+          'Authorized preview browser only; workspace loopback is not the preview loopback.',
+      },
     },
     platform: process.platform,
     cwd: options.cwd,
@@ -552,6 +587,8 @@ if (
           : [
               `Environnement : ${report.success ? 'prêt pour les contrôles demandés' : 'blocages détectés'}`,
               report.scope,
+              `Node ${report.node} · NODE_ENV ${report.execution.mode} · launcher ${report.execution.launcher}`,
+              `Namespaces: PID ${report.execution.namespaces.pid ?? 'unknown'} · network ${report.execution.namespaces.network ?? 'unknown'}`,
               ...report.checks.map(
                 (item) =>
                   `${item.status.toUpperCase()} ${item.id}${item.detail ? ` : ${item.detail}` : ''}${item.code ? ` [${item.code}]` : ''}${item.hint ? ` — ${item.hint}` : ''}`,

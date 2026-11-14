@@ -4450,6 +4450,7 @@ export type PreviewTerminationDto = {
 };
 
 export type PreviewDiagnosticsDto = {
+    runtimeVersions: PreviewRuntimeVersionsDto | null;
     runId: string | null;
     state: string;
     execution: PreviewExecutionDto | null;
@@ -4471,3 +4472,73 @@ export type PreviewsDiagnosticsResponses = {
 };
 
 export type PreviewsDiagnosticsResponse = PreviewsDiagnosticsResponses[keyof PreviewsDiagnosticsResponses];
+
+
+export type PreviewRuntimeVersionsDto = {
+    checkedAt: number;
+    node: string | null;
+    npm: string | null;
+    pnpm: string | null;
+    corepack: string | null;
+};
+
+export type PreviewExecutionIssueDto = {
+    code: string;
+    severity: 'error' | 'warning';
+};
+
+export type PreviewExecutionCheckDto = {
+    valid: boolean;
+    mode: 'development' | 'production' | 'test' | 'unknown';
+    port: number;
+    kind: 'development' | 'production' | 'custom';
+    issues: Array<PreviewExecutionIssueDto>;
+};
+
+export type PreviewLaunchConfigurationDto = {
+    profile: {
+        [key: string]: unknown;
+    } | null;
+    executionCheck: PreviewExecutionCheckDto | null;
+    policyRevision: string;
+    recipeRevision: string | null;
+    revision: string | null;
+    agentManaged: boolean;
+    stale: boolean;
+    sourcePath: string | null;
+    sourceError: string | null;
+};
+
+export type PreviewsRecipeData = {
+    body?: never;
+    path: {
+        projectId: string;
+        threadId: string;
+    };
+    query?: never;
+    url: '/api/projects/{projectId}/agents/{threadId}/preview/recipe';
+};
+
+export type PreviewsRecipeResponses = {
+    200: PreviewLaunchConfigurationDto;
+};
+
+export type PreviewsRecipeResponse = PreviewsRecipeResponses[keyof PreviewsRecipeResponses];
+
+export type PreviewsSaveRecipeData = {
+    body: {
+        [key: string]: unknown;
+    };
+    path: {
+        projectId: string;
+        threadId: string;
+    };
+    query?: never;
+    url: '/api/projects/{projectId}/agents/{threadId}/preview/recipe';
+};
+
+export type PreviewsSaveRecipeResponses = {
+    200: PreviewLaunchConfigurationDto;
+};
+
+export type PreviewsSaveRecipeResponse = PreviewsSaveRecipeResponses[keyof PreviewsSaveRecipeResponses];

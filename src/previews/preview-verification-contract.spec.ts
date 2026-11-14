@@ -63,7 +63,24 @@ it('publishes the typed verification bootstrap contract used by the browser SDK'
       },
     });
     expect(document.components?.schemas?.PreviewDiagnosticsDto).toMatchObject({
-      required: ['runId', 'state', 'execution', 'termination'],
+      required: [
+        'runtimeVersions',
+        'runId',
+        'state',
+        'execution',
+        'termination',
+      ],
+    });
+    const recipeUrl =
+      '/api/projects/{projectId}/agents/{threadId}/preview/recipe';
+    expect(document.paths[recipeUrl].get?.responses['200']).toMatchObject({
+      content: {
+        'application/json': {
+          schema: {
+            $ref: '#/components/schemas/PreviewLaunchConfigurationDto',
+          },
+        },
+      },
     });
     // Optional local export for focused SDK regeneration without unrelated API changes.
     if (process.env.PREVIEW_OPENAPI_EXPORT)
@@ -73,6 +90,7 @@ it('publishes the typed verification bootstrap contract used by the browser SDK'
           ...document,
           paths: {
             [url]: { post: operation },
+            [recipeUrl]: document.paths[recipeUrl],
             '/api/projects/{projectId}/agents/{threadId}/preview/diagnostics':
               document.paths[
                 '/api/projects/{projectId}/agents/{threadId}/preview/diagnostics'

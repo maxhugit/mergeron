@@ -123,7 +123,6 @@ Une connexion de projet n’est ni un dossier de travail ni une autorisation imp
 
 Les identifiants sont chiffrés côté serveur ; les fichiers temporaires de clé, empreintes et configuration ont des permissions privées et sont retirés après usage. SSH ignore la configuration utilisateur, les agents d’authentification ambiants et les redirections ; les empreintes sont vérifiées strictement. Aucun hôte ni identifiant n’est fourni par l’agent. Les sorties et la durée sont bornées, la révocation est revérifiée et les demandes sont réservées avant l’envoi pour empêcher une répétition après un résultat incertain. FTPS conserve la validation TLS ; FTP reste un choix explicitement non chiffré.
 
-
 ## Consignes Git associées aux agents
 
 Une source de consignes est une copie locale enregistrée dans le même projet,
@@ -182,3 +181,11 @@ d’arrêt exige les droits habituels sur le projet et l’agent, projette des c
 explicites et n’exécute aucun programme du projet. Les compteurs Docker et le
 helper de volumes sont distincts des logs applicatifs non fiables ; un code
 137 ne suffit pas à confirmer un OOM. Les limites de ressources sont conservées.
+
+Le contrôle des recettes ne tente pas d’interpréter des scripts arbitraires :
+les cas non reconnus restent signalés. Les versions du runtime sont sondées
+uniquement lors d’un lancement déjà autorisé, dans un conteneur technique jetable
+possédé, de la même image applicative et sous UID 11002, avec commande fixe et réponse bornée. Les manifestes
+globaux ne sont jamais exécutés ; aucun secret, environnement complet ou
+programme du projet n’est renvoyé. Consulter les diagnostics ne provoque pas
+une nouvelle exécution Docker.

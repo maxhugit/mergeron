@@ -187,6 +187,32 @@ describe('project-scoped generic preview service', () => {
     };
     return { ...f, input };
   }
+  it('exposes safe launch checks and rejects a conflicting recipe before contacting the runtime', async () => {
+    const f = configured();
+    f.run(() =>
+      f.service.saveSettings('p', {
+        expectedRevision: f.rows.get(projectPreviewProfiles)?.revision,
+        profile: {
+          enabled: true,
+          start: 'next dev',
+          port: 3000,
+          env: {
+            NODE_ENV: 'production',
+            PORT: '4000',
+            PASSWORD: 'do-not-expose',
+          },
+        },
+      }),
+    );
+    const configuration = f.run(() => f.service.launchConfiguration('p', 't'));
+    expect(configuration.executionCheck?.valid).toBe(false);
+    expect(configuration.executionCheck?.mode).toBe('production');
+    expect(JSON.stringify(configuration)).not.toContain('do-not-expose');
+    await expect(
+      f.run(() => f.service.start('p', 't', 'conflict-start')),
+    ).rejects.toThrow('PREVIEW_EXECUTION_CONFLICT');
+    expect(f.request.mock.calls.some(([op]) => op === 'start')).toBe(false);
+  });
   it('reports a confirmed missing run without discarding its configuration or mislabelling the Manager', async () => {
     const f = configured();
     const row = {

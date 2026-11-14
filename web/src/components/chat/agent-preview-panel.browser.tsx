@@ -33,6 +33,13 @@ vi.mock('@/generated/api', async (importOriginal) => ({
     data: {
       runId: 'synthetic-run',
       state: 'running',
+      runtimeVersions: {
+        checkedAt: 1794700800000,
+        node: '22.23.3',
+        npm: '10.9.0',
+        pnpm: null,
+        corepack: '0.34.0',
+      },
       execution: {
         runtime: 'node',
         nodeEnv: 'development',
@@ -496,6 +503,7 @@ for (const width of [1180, 390])
     expect(await screen.findByText(/Code de sortie : 137/)).toBeVisible();
     expect(screen.getByText(/137 seul ne prouve/)).toBeVisible();
     expect(screen.getByText(/NODE_ENV : development/)).toBeVisible();
+    expect(screen.getByText(/Node 22.23.3/)).toBeVisible();
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       document.documentElement.clientWidth,
     );

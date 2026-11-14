@@ -416,6 +416,10 @@ try {
   await new Promise((resolve) =>
     gateway.server.listen(8173, '0.0.0.0', resolve),
   );
+  assert.match(
+    (await manager.status(input.runId)).runtimeVersions?.node ?? '',
+    /^22\./,
+  );
   const minted = await gateway.mint(grant),
     token = new URLSearchParams(new URL(minted.url).hash.slice(1)).get(
       'mergeron-preview',

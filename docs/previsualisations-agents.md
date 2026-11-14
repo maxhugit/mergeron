@@ -739,3 +739,51 @@ L’arrêt, la recréation ou l’expiration suppriment les volumes temporaires 
 sources originales restent conservées. Aucun plafond n’est relevé automatiquement.
 Le diagnostic HTTP authentifié `GET /api/projects/:projectId/agents/:threadId/preview/diagnostics`
 est en lecture seule et ne lance aucun binaire du projet.
+
+## Contrôle de l’environnement de lancement
+
+Avant **Démarrer** ou **Recréer**, la recette présente son mode NODE_ENV et son
+port. Le serveur et le Manager refusent un PORT enregistré qui contredit le port
+de la recette, un mode incompatible avec une commande directement reconnue
+(`next dev`, `next start`, `vite`, `vite preview` et leurs formes `exec`/`pnpm exec`),
+ou un lancement explicitement détaché avec `&`. Les options de port littérales
+reconnues doivent elles aussi correspondre. Corriger la recette, puis la relire.
+
+Un nom de script tel que `npm run dev` ne suffit pas à connaître son contenu.
+Les commandes personnalisées ou complexes restent autorisées, avec un contrôle
+incomplet explicitement signalé ; elles ne sont pas déclarées cohérentes par
+interprétation d’un nom. Les autres variables et les secrets ne sont pas affichés.
+La synchronisation à chaud avec un mode production est signalée : elle ne prouve
+pas une recompilation. Les vérifications ne changent ni les droits ni les images
+ou quotas autorisés.
+
+Les phases installation, compilation et démarrage conservent leurs exports et
+leur dossier. Si une phase change NODE_ENV ou PORT, elle doit rétablir la valeur
+prévue avant le démarrage ; sinon le lancement s’arrête avec un code stable,
+sans réafficher la valeur. Garder le serveur au premier plan : le Manager possède
+son cycle de vie, son délai de démarrage et son arrêt.
+
+À la création, le Manager observe le Node installé dans l’image approuvée et les
+versions npm/pnpm/Corepack accessibles dans ses manifestes globaux immuables.
+Ce contrôle fixe est borné, exécuté sous l’utilisateur non privilégié, depuis `/`, dans un conteneur
+technique jetable de la même image, sans sources ni secrets montés. Il est retiré
+avant le démarrage applicatif et ne concurrence donc pas sa mémoire. Aucun script
+du projet ou gestionnaire de paquets n’est exécuté et le réseau est désactivé. Il reste
+inconnu si l’image ne fournit pas ces chemins ou ces outils. Il n’est jamais
+relancé par la consultation d’un diagnostic. **Exécution et causes d’arrêt**
+affiche la mesure et sa date. Elle décrit l’image au démarrage : un script qui
+sélectionne ensuite un autre Node doit annoncer et vérifier sa propre version.
+
+| Contexte                                   | Processus, variables et réseau                                                                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Deux commandes de l’agent                  | Leurs exports shell ne persistent pas ; la visibilité des PID dépend de la session et du sandbox existant. Ne pas supposer qu’un processus détaché survivra. |
+| Terminal du workspace                      | Il garde son shell jusqu’à fermeture/remplacement ; ce shell n’est pas le conteneur de preview.                                                              |
+| Deux appels au terminal de la même preview | Ils accèdent au même conteneur et à son loopback ; le serveur lancé par la recette reste géré indépendamment de ces shells.                                  |
+| Navigateur public                          | Il utilise l’URL HTTPS et l’autorisation Mergeron ; localhost depuis l’agent désigne un autre contexte.                                                      |
+
+Parcours reproductible : préparer la recette, lancer avec `project_preview_manage`,
+attendre `preview.ready` via `project_preview_read`, puis utiliser le terminal du
+conteneur pour une vérification locale ou le navigateur autorisé pour le parcours
+public. Fermer un terminal de diagnostic ne détache pas et n’arrête pas le serveur
+possédé par le Manager. Recréer l’environnement supprime toujours ses données
+temporaires, contrairement à une simple synchronisation.

@@ -1041,6 +1041,14 @@
               "La RAM totale comprend les pages tmpfs imputées au conteneur. Fichiers et mémoire partagée se recouvrent ; les occupations des volumes ne s’ajoutent pas à ce total. Une mesure absente est inconnue, jamais zéro.",
               "La cause d’arrêt est conservée : OOM confirmé par Docker, sortie du processus, délai dépassé, expiration ou arrêt demandé. Le code 137 seul ne prouve pas un manque de RAM ; un volume plein est un autre diagnostic. Les relevés après arrêt sont historiques et les volumes temporaires sont supprimés à l’arrêt, à la recréation ou à l’expiration."
             ]
+          },
+          {
+            "title": "Vérifier le contrat de lancement",
+            "paragraphs": [
+              "La recette affiche NODE_ENV et le port prévu avant de lancer. Les ports contradictoires, les modes incompatibles avec une commande reconnue et les serveurs explicitement détachés sont bloqués. Un script personnalisé reste possible avec un avertissement : son nom ne prouve pas son mode.",
+              "Installation et compilation doivent rétablir NODE_ENV et PORT avant le démarrage si elles les modifient. Les autres exports restent partagés entre phases. Les versions de l’image sont observées une fois au lancement et datées ; un outil absent reste inconnu.",
+              "Pour tester depuis plusieurs appels, lancez le serveur avec la recette et utilisez le terminal de ce conteneur pour son localhost. Le workspace possède un autre contexte ; le navigateur public emploie l’URL autorisée. Fermer un shell de diagnostic n’arrête pas le serveur géré."
+            ]
           }
         ],
         "related": [

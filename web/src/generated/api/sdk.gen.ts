@@ -1207,3 +1207,22 @@ export const previewsDiagnostics = <ThrowOnError extends boolean = false>(option
     url: '/api/projects/{projectId}/agents/{threadId}/preview/diagnostics',
     ...options
 });
+
+
+import type { PreviewsRecipeData, PreviewsRecipeResponses, PreviewsSaveRecipeData, PreviewsSaveRecipeResponses } from './types.gen';
+
+export const previewsRecipe = <ThrowOnError extends boolean = false>(options: Options<PreviewsRecipeData, ThrowOnError>) => (options.client ?? client).get<PreviewsRecipeResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/projects/{projectId}/agents/{threadId}/preview/recipe',
+    ...options
+});
+
+export const previewsSaveRecipe = <ThrowOnError extends boolean = false>(options: Options<PreviewsSaveRecipeData, ThrowOnError>) => (options.client ?? client).put<PreviewsSaveRecipeResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/projects/{projectId}/agents/{threadId}/preview/recipe',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});

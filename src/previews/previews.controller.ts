@@ -1,8 +1,10 @@
+import { PreviewLaunchConfigurationDto } from './preview-launch.dto';
 import { PreviewDiagnosticsDto } from './preview-diagnostics.dto';
 import { Controller, Get, Put, Post, Param, Body, Query } from '@nestjs/common';
 import { ProjectPreviewsService } from './project-previews.service';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiCreatedResponse,
   ApiOperation,
   ApiOkResponse,
@@ -38,13 +40,17 @@ export class PreviewsController {
   ) {
     return this.previews.preparedAgents(p);
   }
-  @Get('agents/:threadId/preview/recipe') recipe(
-    @Param('projectId') p: string,
-    @Param('threadId') t: string,
-  ) {
+  @Get('agents/:threadId/preview/recipe')
+  @ApiBearerAuth()
+  @ApiOkResponse({ type: PreviewLaunchConfigurationDto })
+  recipe(@Param('projectId') p: string, @Param('threadId') t: string) {
     return this.previews.launchConfiguration(p, t);
   }
-  @Put('agents/:threadId/preview/recipe') saveRecipe(
+  @Put('agents/:threadId/preview/recipe')
+  @ApiBody({ schema: { type: 'object', additionalProperties: true } })
+  @ApiBearerAuth()
+  @ApiOkResponse({ type: PreviewLaunchConfigurationDto })
+  saveRecipe(
     @Param('projectId') p: string,
     @Param('threadId') t: string,
     @Body() input: Record<string, unknown>,

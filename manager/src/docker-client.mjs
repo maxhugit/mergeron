@@ -148,6 +148,75 @@ export class DockerClient {
     );
   }
 
+  /** Only at an authorized preview launch; fixed image binaries, no project script or network. */
+  async previewRuntimeVersions(id) {
+    const code = `const fs=require('node:fs'),path=require('node:path');
+const root=path.dirname(path.dirname(process.execPath));
+const version=(name)=>{for(const file of [path.join(root,'lib/node_modules',name,'package.json'),path.join('/usr/share/nodejs',name,'package.json')]){let fd;try{fd=fs.openSync(file,fs.constants.O_RDONLY|fs.constants.O_NONBLOCK);const stat=fs.fstatSync(fd);if(!stat.isFile()||stat.size>65536)continue;const data=JSON.parse(fs.readFileSync(fd,'utf8'));if(data.name===name&&typeof data.version==='string'&&/^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(data.version))return data.version;}catch{}finally{if(fd!==undefined)fs.closeSync(fd);}}return null;};
+console.log('MERGERON_RUNTIME:'+JSON.stringify({node:process.versions.node,npm:version('npm'),pnpm:version('pnpm'),corepack:version('corepack')}));`;
+    const quote = (v) => "'" + v.replaceAll("'", "'\\''") + "'";
+    const created = await this.request(
+      `/containers/${encodeURIComponent(id)}/exec`,
+      {
+        method: 'POST',
+        body: {
+          Cmd: [
+            '/bin/sh',
+            '-c',
+            'for binary in /usr/local/bin/node /usr/bin/node /nodejs/bin/node; do if [ -x "$binary" ]; then exec "$binary" -e ' +
+              quote(code) +
+              '; fi; done; exit 69',
+          ],
+          User: '11002:11002',
+          WorkingDir: '/',
+          Privileged: false,
+          AttachStdin: false,
+          AttachStdout: true,
+          AttachStderr: false,
+          Tty: true,
+          Env: [
+            'PATH=/usr/local/bin:/usr/bin:/bin:/nodejs/bin',
+            'NODE_OPTIONS=',
+            'COREPACK_ENABLE_NETWORK=0',
+          ],
+        },
+      },
+    );
+    // A fixed, input-free TTY gives plain UTF-8 instead of Docker multiplex
+    // headers interleaved with a possibly fragmented JSON line.
+    const output = await this.request(
+      `/exec/${encodeURIComponent(created.Id)}/start`,
+      {
+        method: 'POST',
+        body: { Detach: false, Tty: true },
+        responseType: 'text',
+        timeout: 3000,
+        maxResponseBytes: 4096,
+      },
+    );
+    const state = await this.request(
+      `/exec/${encodeURIComponent(created.Id)}/json`,
+    );
+    if (state.Running || state.ExitCode !== 0) return null;
+    const match = /MERGERON_RUNTIME:(\{[^\r\n]*\})/.exec(output);
+    if (!match) return null;
+    const report = JSON.parse(match[1]);
+    const version = (v) =>
+      typeof v === 'string' &&
+      v.length <= 80 &&
+      /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(v)
+        ? v
+        : null;
+    if (!version(report.node)) return null;
+    return {
+      checkedAt: Date.now(),
+      node: version(report.node),
+      npm: version(report.npm),
+      pnpm: version(report.pnpm),
+      corepack: version(report.corepack),
+    };
+  }
+
   async openTerminal(id, user, cols, rows) {
     const exec = await this.request(
       `/containers/${encodeURIComponent(id)}/exec`,

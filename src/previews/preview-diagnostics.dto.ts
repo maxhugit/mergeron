@@ -6,6 +6,13 @@ export class PreviewExecutionDto {
   @ApiProperty() directory!: string;
   @ApiProperty() updateMode!: string;
 }
+export class PreviewRuntimeVersionsDto {
+  @ApiProperty({ type: Number }) checkedAt!: number;
+  @ApiProperty({ type: String, nullable: true }) node!: string | null;
+  @ApiProperty({ type: String, nullable: true }) npm!: string | null;
+  @ApiProperty({ type: String, nullable: true }) pnpm!: string | null;
+  @ApiProperty({ type: String, nullable: true }) corepack!: string | null;
+}
 export class PreviewTerminationDto {
   @ApiProperty({
     enum: [
@@ -23,6 +30,8 @@ export class PreviewTerminationDto {
   @ApiProperty({ type: String, nullable: true }) finishedAt!: string | null;
 }
 export class PreviewDiagnosticsDto {
+  @ApiProperty({ type: PreviewRuntimeVersionsDto, nullable: true })
+  runtimeVersions!: PreviewRuntimeVersionsDto | null;
   @ApiProperty({ type: String, nullable: true }) runId!: string | null;
   @ApiProperty() state!: string;
   @ApiProperty({ type: PreviewExecutionDto, nullable: true })
@@ -34,6 +43,13 @@ export class PreviewDiagnosticsDto {
 export function previewDiagnostics(
   observed: Record<string, unknown>,
 ): PreviewDiagnosticsDto {
+  const versions = observed.runtimeVersions as Record<string, unknown> | null;
+  const version = (v: unknown) =>
+    typeof v === 'string' &&
+    v.length <= 80 &&
+    /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(v)
+      ? v
+      : null;
   const execution = observed.execution as Record<string, unknown> | null;
   const termination = observed.termination as Record<string, unknown> | null;
   const causes = [
@@ -44,6 +60,18 @@ export function previewDiagnostics(
     'user_stop',
   ];
   return {
+    runtimeVersions:
+      versions &&
+      Number.isSafeInteger(versions.checkedAt) &&
+      version(versions.node)
+        ? {
+            checkedAt: Number(versions.checkedAt),
+            node: version(versions.node),
+            npm: version(versions.npm),
+            pnpm: version(versions.pnpm),
+            corepack: version(versions.corepack),
+          }
+        : null,
     runId: typeof observed.runId === 'string' ? observed.runId : null,
     state: typeof observed.state === 'string' ? observed.state : 'unknown',
     execution:
