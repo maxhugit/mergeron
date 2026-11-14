@@ -3568,3 +3568,116 @@ describe('retargeting existing GitHub pull requests', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
+
+it('pages a 59-file frozen staged review without truncation, including UTF-8 boundaries', async () => {
+  for (let n = 0; n < 59; n++)
+    await writeFile(
+      path.join(cwd, `review-${n}.txt`),
+      `${n}: ${'é😀漢'.repeat(220)}\n`,
+    );
+  await git(['add', '--all']);
+  const originalIndex = await readFile(path.join(cwd, '.git/index'));
+  const whole = await service.stagedDiff('p', copyId);
+  let cursor: string | undefined;
+  let combined = '';
+  let pages = 0;
+  do {
+    const page = await service.stagedDiffPage(
+      'p',
+      copyId,
+      undefined,
+      cursor,
+      whole.fingerprint,
+    );
+    expect(page.fingerprint).toBe(whole.fingerprint);
+    expect(page.scope).toBe('index');
+    expect(Buffer.byteLength(page.diff)).toBeLessThanOrEqual(8192);
+    expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThan(65536);
+    expect(page.diff).not.toContain('\ufffd');
+    combined += page.diff;
+    cursor = page.nextCursor ?? undefined;
+    expect(page.lastPage).toBe(!cursor);
+    pages++;
+    expect(pages).toBeLessThan(60);
+  } while (cursor);
+  expect(pages).toBeGreaterThan(1);
+  expect(combined).toBe(whole.diff);
+  expect(await readFile(path.join(cwd, '.git/index'))).toEqual(originalIndex);
+});
+it('invalidates a paged review on index or diff-stream changes and rejects forged/scoped cursors', async () => {
+  await writeFile(path.join(cwd, 'README.md'), 'review me\n'.repeat(2000));
+  await git(['add', 'README.md']);
+  const first = await service.stagedDiffPage('p', copyId);
+  expect(first.nextCursor).not.toBeNull();
+  const forged =
+    first.nextCursor!.slice(0, -1) +
+    (first.nextCursor!.endsWith('0') ? '1' : '0');
+  await expect(
+    service.stagedDiffPage('p', copyId, undefined, forged),
+  ).rejects.toThrow('GIT_REVIEW_CURSOR_INVALID');
+  await expect(
+    service.stagedDiffPage('p', copyId, 'README.md', first.nextCursor),
+  ).rejects.toThrow('GIT_REVIEW_CURSOR_INVALID');
+  await writeFile(path.join(cwd, '.gitattributes'), 'README.md -diff\n');
+  expect((await service.snapshot('p', copyId)).fingerprint).toBe(
+    first.fingerprint,
+  );
+  await expect(
+    service.stagedDiffPage('p', copyId, undefined, first.nextCursor),
+  ).rejects.toThrow('GIT_STALE');
+  await rm(path.join(cwd, '.gitattributes'));
+  const restarted = new WorkspaceGitService(copies, resources);
+  await expect(
+    restarted.stagedDiffPage('p', copyId, undefined, first.nextCursor),
+  ).rejects.toThrow('GIT_REVIEW_CURSOR_INVALID');
+  await writeFile(path.join(cwd, 'README.md'), 'staged after review\n');
+  await git(['add', 'README.md']);
+  await expect(
+    service.stagedDiffPage('p', copyId, undefined, first.nextCursor),
+  ).rejects.toThrow('GIT_STALE');
+  await expect(
+    service.stagedDiffPage(
+      'p',
+      copyId,
+      undefined,
+      undefined,
+      first.fingerprint,
+    ),
+  ).rejects.toThrow('GIT_STALE');
+});
+it('streams a diff larger than the legacy output limit without retaining its complete contents', async () => {
+  await writeFile(
+    path.join(cwd, 'large-review.txt'),
+    'a long source line\n'.repeat(70000),
+  );
+  await git(['add', 'large-review.txt']);
+  const first = await service.stagedDiffPage('p', copyId);
+  expect(first.totalBytes).toBeGreaterThan(1024 * 1024);
+  expect(Buffer.byteLength(first.diff)).toBeLessThanOrEqual(8192);
+  const next = await service.stagedDiffPage(
+    'p',
+    copyId,
+    undefined,
+    first.nextCursor,
+  );
+  expect(next.offset).toBe(Buffer.byteLength(first.diff));
+  expect(next.diffFingerprint).toBe(first.diffFingerprint);
+  expect(next.fingerprint).toBe(first.fingerprint);
+});
+
+it('keeps control-character diff pages below the MCP response budget', async () => {
+  await writeFile(path.join(cwd, 'README.md'), '\x01'.repeat(20000) + '\n');
+  await git(['add', 'README.md']);
+  const page = await service.stagedDiffPage('p', copyId);
+  expect(
+    Buffer.byteLength(
+      JSON.stringify({
+        connectionId: 'remote',
+        operation: 'local_staged_diff',
+        data: page,
+        untrustedContent: true,
+      }),
+    ),
+  ).toBeLessThan(65536);
+  expect(page.nextCursor).not.toBeNull();
+});

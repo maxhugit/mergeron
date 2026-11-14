@@ -39,6 +39,11 @@ export const readProjectGitInput = z.strictObject({
     'local_conflict',
   ]),
   copyId: id.optional(),
+  cursor: z.string().max(256).optional(),
+  fingerprint: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   path: z.string().max(2048).optional(),
   ref: revision.optional(),
   number: z.number().int().min(1).max(999999999).optional(),

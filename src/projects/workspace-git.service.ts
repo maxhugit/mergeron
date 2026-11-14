@@ -16,7 +16,12 @@ import {
   rm,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { createHash } from 'node:crypto';
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  timingSafeEqual,
+} from 'node:crypto';
 import { GitHubReadScheduler } from './github-read-scheduler';
 import {
   readGitHubActions,
@@ -35,6 +40,14 @@ import {
   type WorkflowObservation,
 } from './github-workflow-observation';
 
+interface GitOutputWindow {
+  offset: number;
+  bytes: number;
+  totalBytes?: number;
+  buffer?: Buffer;
+  digest?: string;
+}
+
 export interface GitChange {
   path: string;
   originalPath?: string;
@@ -46,6 +59,7 @@ export interface GitChange {
 export class WorkspaceGitService {
   onWorkingCopyChanged?: (projectId: string, copyId: string) => void;
   private readonly githubReads = new GitHubReadScheduler();
+  private readonly reviewCursorKey = randomBytes(32);
   private readonly prChecks = new Map<
     string,
     {
@@ -546,6 +560,139 @@ export class WorkspaceGitService {
     }
   }
 
+  /** Bounded pages of one frozen index and exact diff stream. No repository content is retained. */
+  async stagedDiffPage(
+    projectId: string,
+    copyId: string,
+    input?: unknown,
+    cursor?: unknown,
+    fingerprint?: unknown,
+  ) {
+    if (
+      fingerprint !== undefined &&
+      (typeof fingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(fingerprint))
+    )
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    const cwd = await this.directory(projectId, copyId);
+    const state = await this.snapshot(projectId, copyId);
+    if (
+      input !== undefined &&
+      (typeof input !== 'string' ||
+        !input ||
+        input.length > 4096 ||
+        input.includes('\0') ||
+        !state.changes.some(
+          (c) => c.path === input && ![' ', '?'].includes(c.status[0]),
+        ))
+    )
+      throw new BadRequestException('Invalid staged Git file');
+    const sign = (offset: number, index: string, diff: string) =>
+      createHmac('sha256', this.reviewCursorKey)
+        .update(
+          JSON.stringify([
+            projectId,
+            copyId,
+            input ?? null,
+            offset,
+            index,
+            diff,
+          ]),
+        )
+        .digest('hex');
+    let offset = 0;
+    let expectedDiff: string | undefined;
+    let expectedIndex = fingerprint;
+    if (cursor !== undefined) {
+      const parsed =
+        typeof cursor === 'string' &&
+        /^(0|[1-9][0-9]{0,7})\.([a-f0-9]{64})\.([a-f0-9]{64})\.([a-f0-9]{64})$/.exec(
+          cursor,
+        );
+      if (!parsed) throw new BadRequestException('GIT_REVIEW_CURSOR_INVALID');
+      offset = Number(parsed[1]);
+      if (
+        offset > 64 * 1024 * 1024 ||
+        !timingSafeEqual(
+          Buffer.from(parsed[4], 'hex'),
+          Buffer.from(sign(offset, parsed[2], parsed[3]), 'hex'),
+        )
+      )
+        throw new ConflictException('GIT_REVIEW_CURSOR_INVALID');
+      if (expectedIndex !== undefined && expectedIndex !== parsed[2])
+        throw new ConflictException('GIT_STALE');
+      expectedIndex = parsed[2];
+      expectedDiff = parsed[3];
+    }
+    if (expectedIndex !== undefined && expectedIndex !== state.fingerprint)
+      throw new ConflictException('GIT_STALE');
+    const index = await readGitIndex(cwd);
+    if (
+      gitStateFingerprint(state.head, state.branch ?? '', index) !==
+      state.fingerprint
+    )
+      throw new ConflictException('GIT_STALE');
+    const folder = await mkdtemp(path.join(tmpdir(), 'mergeron-review-page-'));
+    try {
+      const frozen = path.join(folder, 'index');
+      if (index.length) await writeFile(frozen, index, { mode: 0o600 });
+      const window: GitOutputWindow = { offset, bytes: 8192 + 4 };
+      await this.git(
+        cwd,
+        [
+          'diff',
+          '--cached',
+          '--no-ext-diff',
+          '--no-textconv',
+          '--no-color',
+          '--no-renames',
+          '--no-relative',
+          '--diff-algorithm=myers',
+          '--unified=3',
+          '--src-prefix=a/',
+          '--dst-prefix=b/',
+          ...(state.head ? [state.head] : []),
+          '--',
+          ...(typeof input === 'string' ? [`:(literal)${input}`] : []),
+        ],
+        { GIT_INDEX_FILE: frozen },
+        15000,
+        [0],
+        undefined,
+        window,
+      );
+      if (expectedDiff !== undefined && expectedDiff !== window.digest)
+        throw new ConflictException('GIT_STALE');
+      if (
+        (await this.snapshot(projectId, copyId)).fingerprint !==
+        state.fingerprint
+      )
+        throw new ConflictException('GIT_STALE');
+      const buffer = window.buffer!;
+      let length = Math.min(8192, buffer.length);
+      // The next cursor starts at a UTF-8 boundary, including long single lines.
+      while (length > 0 && (buffer[length] & 0xc0) === 0x80) length--;
+      const nextOffset = offset + length;
+      const nextCursor =
+        nextOffset < window.totalBytes!
+          ? `${nextOffset}.${state.fingerprint}.${window.digest!}.${sign(nextOffset, state.fingerprint, window.digest!)}`
+          : null;
+      return {
+        fingerprint: state.fingerprint,
+        diffFingerprint: window.digest!,
+        scope: input === undefined ? 'index' : 'path',
+        path: input ?? null,
+        diff: buffer.subarray(0, length).toString('utf8'),
+        offset,
+        totalBytes: window.totalBytes!,
+        nextCursor,
+        lastPage: nextCursor === null,
+        untrustedContent: true,
+      };
+    } finally {
+      await rm(folder, { recursive: true, force: true });
+    }
+  }
+
   async commits(projectId: string, copyId: string) {
     const state = await this.snapshot(projectId, copyId);
     if (!state.head) return { items: [], limited: false };
@@ -610,6 +757,7 @@ export class WorkspaceGitService {
     timeoutMs = 15000,
     acceptedExitCodes: number[] = [0],
     input?: Buffer,
+    window?: GitOutputWindow,
   ): Promise<string> {
     // Even `status` can invoke clean/process filters for tracked files. Read
     // names only (never values/secrets) and disable every configured filter.
@@ -640,6 +788,7 @@ export class WorkspaceGitService {
       timeoutMs,
       acceptedExitCodes,
       input,
+      window,
     );
   }
 
@@ -650,6 +799,7 @@ export class WorkspaceGitService {
     timeoutMs = 15000,
     acceptedExitCodes: number[] = [0],
     input?: Buffer,
+    window?: GitOutputWindow,
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       const env = Object.fromEntries(
@@ -692,6 +842,7 @@ export class WorkspaceGitService {
         child.stdin?.end(input);
       }
       let size = 0;
+      const hash = window ? createHash('sha256') : undefined;
       let failed = false;
       let diagnostics = '';
       const fail = (
@@ -705,9 +856,19 @@ export class WorkspaceGitService {
       };
       const timer = setTimeout(() => fail('GIT_COMMAND_TIMEOUT'), timeoutMs);
       child.stdout!.on('data', (data: Buffer) => {
+        const begin = size;
         size += data.length;
-        if (size > 1024 * 1024) fail('GIT_OUTPUT_LIMIT_EXCEEDED');
-        else output.push(data);
+        if (size > (window ? 64 * 1024 * 1024 : 1024 * 1024))
+          fail('GIT_OUTPUT_LIMIT_EXCEEDED');
+        else if (window) {
+          hash!.update(data);
+          const from = Math.max(0, window.offset - begin);
+          const to = Math.min(
+            data.length,
+            window.offset + window.bytes - begin,
+          );
+          if (to > from) output.push(data.subarray(from, to));
+        } else output.push(data);
       });
       // Do not relay diagnostics: local config/paths may contain credentials.
       child.stderr!.on('data', (data: Buffer) => {
@@ -725,7 +886,15 @@ export class WorkspaceGitService {
         if (failed) return;
         if (code === null || !acceptedExitCodes.includes(code))
           fail(gitFailureCode(diagnostics));
-        else resolve(Buffer.concat(output).toString('utf8'));
+        else {
+          const buffer = Buffer.concat(output);
+          if (window) {
+            window.buffer = buffer;
+            window.totalBytes = size;
+            window.digest = hash!.digest('hex');
+          }
+          resolve(buffer.toString('utf8'));
+        }
       });
     });
   }

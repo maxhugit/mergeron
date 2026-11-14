@@ -54,6 +54,7 @@ describe('project connection agent tools', () => {
     commitDelivery: vi.fn(),
     diff: vi.fn(),
     stagedDiff: vi.fn(),
+    stagedDiffPage: vi.fn(),
     commits: vi.fn(),
     mergeStatus: vi.fn(),
     conflictFile: vi.fn(),
@@ -600,7 +601,7 @@ describe('project connection agent tools', () => {
   });
 
   it('can inspect the entire frozen staged index rather than confusing it with working changes', async () => {
-    git.stagedDiff.mockResolvedValue({
+    git.stagedDiffPage.mockResolvedValue({
       fingerprint: state.fingerprint,
       diff: 'reviewed staged patch',
     });
@@ -614,7 +615,13 @@ describe('project connection agent tools', () => {
       data: { fingerprint: state.fingerprint, diff: 'reviewed staged patch' },
       untrustedContent: true,
     });
-    expect(git.stagedDiff).toHaveBeenCalledWith('p', 'own', undefined);
+    expect(git.stagedDiffPage).toHaveBeenCalledWith(
+      'p',
+      'own',
+      undefined,
+      undefined,
+      undefined,
+    );
     await expect(
       call({
         tool: 'read_project_git',

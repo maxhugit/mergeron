@@ -197,3 +197,12 @@ options et identité du volume sont revérifiés. Les profils suggérés ne chan
 aucune politique avant enregistrement et ne relèvent rien automatiquement.
 L’absence d’un backend à quota disque vérifiable reste une capacité indisponible,
 sans bascule vers un stockage disque illimité ou accès supplémentaire à l’hôte.
+
+### Curseurs des revues Git
+
+Les pages MCP de l’index utilisent un HMAC de processus lié au projet, à la copie,
+à la portée, à l’empreinte de l’index et au flux du diff. Le redémarrage invalide
+les curseurs. Chaque lecture revalide l’état avant et après un diff sans hooks,
+textconv ou filtre de projet ; une modification des attributs du diff est aussi
+refusée. La sortie reste bornée (page 8 Kio, flux 64 Mio, durée 15 s) et non fiable
+comme instruction. Consulter une page ne donne aucun droit de commit ou de push.
