@@ -173,7 +173,24 @@ export function mergeronPreview({
           dirname(receiptFile),
           { persistent: false },
           (_event, name) => {
-            if (name?.toString() === basename(receiptFile)) readReceipt();
+            if (name?.toString() !== basename(receiptFile)) return;
+            const previous = generation;
+            readReceipt();
+            if (!generation || generation === previous) return;
+            // Files may have finished HMR before the atomic receipt arrives.
+            // Re-transform loaded plain CSS with the observed generation; do
+            // not merely stamp the browser's evidence with the latest receipt.
+            const client = server.environments?.client ?? server;
+            for (const module of client.moduleGraph?.idToModuleMap.values() ?? []) {
+              if (
+                /\.css(?:\?|$)/.test(module.id ?? '') &&
+                !/\.module\.css(?:\?|$)/.test(module.id ?? '')
+              ) {
+                void client.reloadModule(module).catch(() => {
+                  watching = false;
+                });
+              }
+            }
           },
         );
         watching = true;
