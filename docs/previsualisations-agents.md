@@ -787,3 +787,41 @@ conteneur pour une vérification locale ou le navigateur autorisé pour le parco
 public. Fermer un terminal de diagnostic ne détache pas et n’arrête pas le serveur
 possédé par le Manager. Recréer l’environnement supprime toujours ses données
 temporaires, contrairement à une simple synchronisation.
+
+## Profils de ressources et budgets par projet
+
+Dans **Ressources et durée**, un administrateur peut préparer un profil léger,
+Vite/SPA ou Next.js. Le choix modifie uniquement le formulaire ; il faut enregistrer
+la politique pour approuver mémoire, CPU et budgets. Il ne change ni runtime,
+image, commandes ou environnement déjà lancé. Ces valeurs sont des points de
+départ, pas la garantie qu’un projet complexe tiendra dans ses limites.
+
+Le champ facultatif `storageBudget` du profil humain fixe les tailles tmpfs en Mio :
+`workspaceMb` (64–4096), `cacheMb` (16–2048), `temporaryMb` (16–512) et `dataMb`
+(16–256). Les quatre valeurs doivent être fournies ensemble ; aucun autre backend,
+montage ou option Docker n’est accepté. Le Manager applique les tailles à ses
+volumes et vérifie les options réellement renvoyées par Docker. Sans ce champ,
+les limites et l’empreinte du profil historique restent inchangées. Un agent
+hérite de la politique ; sa recette ne peut pas définir ou augmenter ces budgets.
+Une modification de politique s’applique à la prochaine création/recréation.
+
+La vue **Stockage** regroupe RAM applicative, occupation des volumes, date de
+mesure et cause d’arrêt connue. Pages anonymes, fichiers et mémoire partagée ne
+sont pas des catégories à additionner ; le tmpfs occupé ne s’ajoute pas à la RAM
+cgroup. Les volumes peuvent avoir été écrits par plusieurs helpers : on ne peut
+pas attribuer précisément leur charge physique à partir de ces compteurs.
+L’absence de métrique reste inconnue. Après nettoyage, les relevés sont
+historiques ; ils ne signifient pas que les volumes sont encore disponibles.
+Les autres services gardent leurs diagnostics par conteneur.
+
+Le backend actuel ne sait garantir que des volumes tmpfs bornés. Le Manager
+annonce `diskCache.available=false` avec `quota_unavailable`. Aucun volume disque
+illimité n’est créé en remplacement et aucun privilège de montage n’est ajouté.
+Un backend disque demandera une architecture capable de vérifier et d’imposer
+les quotas ; afficher ce choix indisponible évite une fausse garantie.
+
+**Synchroniser** remplace les fichiers sources concernés et conserve `/data`,
+les caches et les volumes. Le mode `restart` peut relancer le processus dans le
+même conteneur. **Arrêter**, **Recréer** et l’expiration suppriment les volumes
+temporaires, y compris `/data`, `/cache` et `/tmp`, tout en conservant les sources
+originales. Les confirmations de destruction restent distinctes de la synchro.

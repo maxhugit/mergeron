@@ -1049,6 +1049,14 @@
               "Install and build must restore NODE_ENV and PORT before startup if they change them. Other exports remain shared across phases. Image versions are observed once at launch and timestamped; missing tools remain unknown.",
               "For tests across multiple calls, launch the server through the recipe and use its container terminal for localhost. The workspace has a separate context; the public browser uses the authorized URL. Closing a diagnostic shell does not stop the managed server."
             ]
+          },
+          {
+            "title": "Choose resources without implicitly raising limits",
+            "paragraphs": [
+              "Lightweight, Vite/SPA and Next.js profiles prepare form values. Saving the policy approves them for future creations; agents cannot raise memory, CPU or volume budgets.",
+              "Source, cache, temporary and data tmpfs budgets remain within Manager ceilings. Existing profiles keep their limits. Disk cache remains unavailable until verifiable quotas can be enforced.",
+              "Storage groups application RAM, volume usage and the stop cause. Memory counters overlap and volumes must not be added to the total. Synchronization retains /data and caches; stop, expiry and recreation delete them. Measurements after cleanup are historical."
+            ]
           }
         ],
         "related": [

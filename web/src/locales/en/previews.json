@@ -209,5 +209,20 @@
     "versions": "Image at startup: Node {{node}} · npm {{npm}} · pnpm {{pnpm}} · Corepack {{corepack}} · Measured {{date}}",
     "versionsUnknown": "Versions were not measured for this environment. Measurement runs at creation; missing values remain unknown.",
     "blocked": "The recipe contains a mode or port conflict. Correct it before launch."
+  },
+  "resourceProfiles": {
+    "title": "Development resource profiles",
+    "help": "Prepares suggested values in this form. Save to approve them; they apply only at a new creation. Agents cannot raise these ceilings. Complex frameworks may require another configuration.",
+    "static": "Static / lightweight",
+    "vite": "Vite / SPA",
+    "next": "Next.js / builds",
+    "budget": "Temporary volume budgets",
+    "diskUnavailable": "Disk cache unavailable: this Manager cannot guarantee disk quotas. Caches remain on tmpfs with the selected limits.",
+    "overview": "Memory, storage and termination",
+    "memory": "Application: {{usage}} / {{limit}} MiB total · Anonymous/process pages: {{processes}} · Files: {{files}} · Shared memory: {{shared}} MiB",
+    "measured": "Memory sample: {{date}}",
+    "historical": "Retained measurements are historical. Deleted volumes are no longer available storage.",
+    "sync": "Synchronizing retains /data, caches and volumes; source files may be replaced. Restart mode may restart the process.",
+    "destroy": "Stopping, expiry or recreation deletes temporary volumes, including /data and caches. Original sources are preserved."
   }
 }

@@ -82,6 +82,15 @@ it('publishes the typed verification bootstrap contract used by the browser SDK'
         },
       },
     });
+    const containersUrl =
+      '/api/projects/{projectId}/agents/{threadId}/preview/containers';
+    expect(document.paths[containersUrl].get?.responses['200']).toMatchObject({
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/PreviewContainersDto' },
+        },
+      },
+    });
     // Optional local export for focused SDK regeneration without unrelated API changes.
     if (process.env.PREVIEW_OPENAPI_EXPORT)
       await writeFile(
@@ -91,6 +100,7 @@ it('publishes the typed verification bootstrap contract used by the browser SDK'
           paths: {
             [url]: { post: operation },
             [recipeUrl]: document.paths[recipeUrl],
+            [containersUrl]: document.paths[containersUrl],
             '/api/projects/{projectId}/agents/{threadId}/preview/diagnostics':
               document.paths[
                 '/api/projects/{projectId}/agents/{threadId}/preview/diagnostics'

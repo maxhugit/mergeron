@@ -1,4 +1,5 @@
 'use strict';
+const storage = require('./preview-storage.cjs');
 // Shared wire validation. Requests never supply Docker specs, mounts or images.
 const crypto = require('node:crypto');
 const ID = /^[a-zA-Z0-9_-]{1,100}$/;
@@ -104,6 +105,7 @@ function profile(value) {
     'path',
     'env',
     'memoryMb',
+    'storageBudget',
     'cpus',
     'lifetimeMinutes',
     'services',
@@ -166,6 +168,9 @@ function profile(value) {
     port: integer(value.port, 1024, 65535, 3000),
     path,
     env: environment(value.env),
+    ...(value.storageBudget === undefined
+      ? {}
+      : { storageBudget: storage.storageBudget(value.storageBudget) }),
     memoryMb: integer(value.memoryMb, 128, 8192, 1024),
     cpus: integer(value.cpus, 1, 4, 1),
     // Preserve historical minute values when reading stored profiles.
@@ -250,6 +255,9 @@ function agentProfile(policy, input) {
   return profile({
     ...recipe,
     enabled: true,
+    ...(approved.storageBudget
+      ? { storageBudget: approved.storageBudget }
+      : {}),
     memoryMb: approved.memoryMb,
     cpus: approved.cpus,
     lifetimeMinutes: approved.lifetimeMinutes,

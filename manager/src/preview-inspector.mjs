@@ -53,6 +53,7 @@ export class PreviewInspector {
         .slice(0, 16)
         .map(async (o) => {
           const c = await m.owned(o.id, r, o.component);
+          let metricsCheckedAt = null;
           let cpuPercent = null,
             memoryBytes = null,
             memory = {
@@ -69,6 +70,7 @@ export class PreviewInspector {
                 `/containers/${encodeURIComponent(o.id)}/stats?stream=false&one-shot=true`,
                 { timeout: 1500 },
               );
+              metricsCheckedAt = Date.now();
               const sampleKey = `${r.runId}:${o.id}`;
               const previous = s.precpu_stats?.system_cpu_usage
                 ? s.precpu_stats
@@ -121,6 +123,7 @@ export class PreviewInspector {
             startedAt: c.State?.StartedAt ?? null,
             cpuPercent,
             memoryBytes,
+            metricsCheckedAt,
             memory,
             terminalAvailable:
               c.State?.Running === true &&

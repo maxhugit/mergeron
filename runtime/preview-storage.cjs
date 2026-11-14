@@ -9,6 +9,32 @@ const previewStorage = Object.freeze({
   inodesPerVolume: 524288,
 });
 
+/** Optional human-approved bounds; absent preserves the exact legacy profile shape. */
+function storageBudget(value) {
+  if (value === undefined) return undefined;
+  const fields = ['workspaceMb', 'cacheMb', 'temporaryMb', 'dataMb'];
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    Object.keys(value).length !== fields.length ||
+    fields.some(
+      (k) =>
+        !Number.isSafeInteger(value[k]) ||
+        value[k] < (k === 'workspaceMb' ? 64 : 16) ||
+        value[k] > previewStorage[k],
+    )
+  )
+    throw Error('PREVIEW_INVALID_STORAGE_BUDGET');
+  return Object.fromEntries(fields.map((k) => [k, value[k]]));
+}
+function storageLimits(profile) {
+  return {
+    ...previewStorage,
+    ...(storageBudget(profile?.storageBudget) ?? {}),
+  };
+}
+
 const storageMounts = Object.freeze([
   { role: 'workspace', path: '/workspace', observerPath: '/target' },
   { role: 'cache', path: '/cache', observerPath: '/cache' },
@@ -143,6 +169,8 @@ function safeStorageStatus(value) {
 }
 module.exports = {
   previewStorage,
+  storageBudget,
+  storageLimits,
   storageMounts,
   cacheEnvironment,
   storageSample,

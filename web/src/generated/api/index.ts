@@ -47,3 +47,6 @@ export type { PreviewExecutionDto, PreviewTerminationDto, PreviewDiagnosticsDto,
 
 export { previewsRecipe, previewsSaveRecipe } from './sdk.gen';
 export type { PreviewRuntimeVersionsDto, PreviewExecutionIssueDto, PreviewExecutionCheckDto, PreviewLaunchConfigurationDto, PreviewsRecipeData, PreviewsRecipeResponses, PreviewsRecipeResponse, PreviewsSaveRecipeData, PreviewsSaveRecipeResponses, PreviewsSaveRecipeResponse } from './types.gen';
+
+export { previewsContainers } from './sdk.gen';
+export type { PreviewContainerMemoryDto, PreviewContainerDto, PreviewContainersDto, PreviewsContainersData, PreviewsContainersResponses, PreviewsContainersResponse } from './types.gen';

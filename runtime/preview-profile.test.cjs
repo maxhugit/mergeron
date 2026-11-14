@@ -250,3 +250,27 @@ test('lifetime choices include unlimited, with five hours as default', () => {
   for (const value of [undefined, 0, -1, 240, 301, 1441, '300'])
     assert.throws(() => contract.lifetime(value));
 });
+
+test('legacy profiles retain their exact field set; agents inherit only human storage budgets', () => {
+  assert.equal(Object.hasOwn(contract.profile({}), 'storageBudget'), false);
+  const budget = {
+    workspaceMb: 1024,
+    cacheMb: 128,
+    temporaryMb: 64,
+    dataMb: 64,
+  };
+  const policy = {
+    enabled: true,
+    agentManaged: true,
+    agentRuntimes: ['node'],
+    storageBudget: budget,
+    memoryMb: 1024,
+  };
+  const recipe = { runtime: 'node', start: 'npm run dev' };
+  assert.deepEqual(contract.agentProfile(policy, recipe).storageBudget, budget);
+  assert.throws(
+    () => contract.agentRecipe({ ...recipe, storageBudget: budget }),
+    /PREVIEW_INVALID_CONFIGURATION/,
+  );
+  assert.deepEqual(contract.safeProfile(policy).storageBudget, budget);
+});

@@ -86,6 +86,15 @@ vi.mock('@/lib/projects-api', () => ({
           enabled: true,
           domain: 'preview.example',
           runtimes: [{ id: 'node', description: 'Node.js 22' }],
+          storage: {
+            backend: 'tmpfs',
+            memoryCharged: true,
+            workspaceMb: 4096,
+            cacheMb: 2048,
+            temporaryMb: 512,
+            dataMb: 256,
+            inodesPerVolume: 524288,
+          },
         },
         viewer: { enabled: true },
       };
@@ -313,5 +322,50 @@ for (const width of [390, 1100])
     await expect.poll(() => getComputedStyle(dialog).opacity).toBe('1');
     await page.screenshot({
       path: `../../../.vitest-screenshots/execution-check-${width}.png`,
+    });
+  });
+
+for (const width of [390, 1100])
+  test(`resource suggestions require an explicit policy save at ${width}px`, async () => {
+    await page.viewport(width, 1000);
+    render(
+      <QueryClientProvider client={client}>
+        <div className="h-screen p-3">
+          <ProjectPreviewSettings projectId="project" />
+        </div>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(
+      await screen.findByRole('tab', { name: 'Ressources et durée' }),
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Next.js / compilation' }),
+    );
+    expect(screen.getByText(/Cache disque indisponible/)).toBeVisible();
+    expect(
+      fixture.calls.some(
+        (c) => c.path.endsWith('/test-environment') && c.body.profile,
+      ),
+    ).toBe(false);
+    const save = screen.getByRole('button', { name: 'Enregistrer le profil' });
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(
+        fixture.calls.some(
+          (c) => c.path.endsWith('/test-environment') && c.body.profile,
+        ),
+      ).toBe(true),
+    );
+    const saved = fixture.calls.find(
+      (c) => c.path.endsWith('/test-environment') && c.body.profile,
+    )!.body.profile as Record<string, unknown>;
+    expect(saved.memoryMb).toBe(4096);
+    expect(saved.storageBudget).toMatchObject({
+      cacheMb: 512,
+      workspaceMb: 4096,
+    });
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/resource-profile-${width}.png`,
     });
   });

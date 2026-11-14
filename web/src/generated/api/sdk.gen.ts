@@ -1226,3 +1226,12 @@ export const previewsSaveRecipe = <ThrowOnError extends boolean = false>(options
         ...options.headers
     }
 });
+
+
+import type { PreviewsContainersData, PreviewsContainersResponses } from './types.gen';
+
+export const previewsContainers = <ThrowOnError extends boolean = false>(options: Options<PreviewsContainersData, ThrowOnError>) => (options.client ?? client).get<PreviewsContainersResponses, unknown, ThrowOnError>({
+    security: [{ scheme: 'bearer', type: 'http' }],
+    url: '/api/projects/{projectId}/agents/{threadId}/preview/containers',
+    ...options
+});

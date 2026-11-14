@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page, userEvent } from 'vitest/browser';
@@ -22,6 +23,7 @@ const api = vi.hoisted(() => ({
   admin: true,
   startupTimeout: false,
   terminated: false,
+  resourceMetrics: false,
   missing: [] as string[],
   prerequisitesFailed: false,
   recipeRequired: false,
@@ -120,7 +122,25 @@ vi.mock('@/lib/projects-api', () => ({
     }
     if (path.endsWith('/start')) api.running = true;
     if (path.endsWith('/stop')) api.running = false;
-    if (path.endsWith('/containers')) return { containers: items };
+    if (path.endsWith('/containers'))
+      return {
+        containers: items.map((c) =>
+          c.component === 'preview-app' && api.resourceMetrics
+            ? {
+                ...c,
+                metricsCheckedAt: Date.now(),
+                memory: {
+                  usageBytes: 96 * 1024 ** 2,
+                  limitBytes: 256 * 1024 ** 2,
+                  anonymousBytes: 40 * 1024 ** 2,
+                  fileBytes: 50 * 1024 ** 2,
+                  sharedBytes: 20 * 1024 ** 2,
+                  oomKilled: false,
+                },
+              }
+            : c,
+        ),
+      };
     if (path.includes('/container-logs'))
       return {
         text: Array.from(
@@ -200,6 +220,7 @@ beforeEach(async () => {
   api.admin = true;
   api.startupTimeout = false;
   api.terminated = false;
+  api.resourceMetrics = false;
   api.missing = [];
   api.prerequisitesFailed = false;
   api.recipeRequired = false;
@@ -518,5 +539,30 @@ for (const width of [1180, 390])
     expect(diagnostics.scrollTop).toBeGreaterThan(0);
     await page.screenshot({
       path: `../../../.vitest-screenshots/preview-diagnostics-${width}.png`,
+    });
+  });
+
+for (const width of [390, 1180])
+  test(`resource overview separates memory totals from tmpfs usage at ${width}px`, async () => {
+    api.resourceMetrics = true;
+    await page.viewport(width, 900);
+    mount();
+    await screen.findByRole('button', { name: /Application/ });
+    fireEvent.click(screen.getByRole('button', { name: 'Stockage' }));
+    const overview = await screen.findByRole('region', {
+      name: 'Mémoire, stockage et arrêt',
+    });
+    expect(
+      await within(overview).findByText(/96.0 \/ 256.0 Mio/),
+    ).toBeVisible();
+    expect(within(overview).getByText(/Synchroniser conserve/)).toBeTruthy();
+    expect(
+      within(overview).getByText(/Arrêter, expirer ou recréer/),
+    ).toBeTruthy();
+    const logs = await screen.findByLabelText('Logs');
+    expect(logs.clientHeight).toBeGreaterThan(30);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/resource-overview-${width}.png`,
     });
   });

@@ -1049,6 +1049,14 @@
               "Installation et compilation doivent rétablir NODE_ENV et PORT avant le démarrage si elles les modifient. Les autres exports restent partagés entre phases. Les versions de l’image sont observées une fois au lancement et datées ; un outil absent reste inconnu.",
               "Pour tester depuis plusieurs appels, lancez le serveur avec la recette et utilisez le terminal de ce conteneur pour son localhost. Le workspace possède un autre contexte ; le navigateur public emploie l’URL autorisée. Fermer un shell de diagnostic n’arrête pas le serveur géré."
             ]
+          },
+          {
+            "title": "Choisir des ressources sans relever les limites implicitement",
+            "paragraphs": [
+              "Les profils léger, Vite/SPA et Next.js préparent les valeurs du formulaire. Enregistrer la politique les approuve pour les prochaines créations ; les agents ne peuvent pas relever mémoire, CPU ou budgets de volumes.",
+              "Les budgets tmpfs de sources, caches, fichiers temporaires et données sont bornés par les plafonds du Manager. Les anciens profils conservent leurs limites. Le cache disque reste indisponible tant qu’un quota vérifiable ne peut pas être imposé.",
+              "Stockage regroupe la RAM applicative, les volumes et la cause d’arrêt. Les compteurs mémoire se recouvrent et les volumes ne s’ajoutent pas au total. Synchroniser conserve /data et les caches ; arrêt, expiration et recréation les suppriment. Les relevés après nettoyage sont historiques."
+            ]
           }
         ],
         "related": [

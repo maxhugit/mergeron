@@ -1,3 +1,4 @@
+import { previewResourcePresets } from '@/lib/preview-resource-presets';
 import { useId, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -296,9 +297,43 @@ function Editor({
           </div>
         </div>
         <div hidden={tab !== 'resources'} className="space-y-4">
+          <section className="space-y-2 rounded border p-3">
+            <h3 className="font-medium">{t('resourceProfiles.title')}</h3>
+            <p className="text-xs text-muted-foreground">
+              {t('resourceProfiles.help')}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {previewResourcePresets.map((preset) => (
+                <Button
+                  key={preset.id}
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setProfile((p) => ({
+                      ...p,
+                      memoryMb: preset.memoryMb,
+                      cpus: preset.cpus,
+                      storageBudget: { ...preset.storageBudget },
+                    }))
+                  }
+                >
+                  {preset.id === 'static'
+                    ? t('resourceProfiles.static')
+                    : preset.id === 'vite'
+                      ? t('resourceProfiles.vite')
+                      : t('resourceProfiles.next')}
+                </Button>
+              ))}
+            </div>
+          </section>
           <h3 className="font-semibold">{t('resourcesTab')}</h3>
           {data.capabilities.storage && (
-            <PreviewStorageSummary limits={data.capabilities.storage} />
+            <PreviewStorageSummary
+              limits={{
+                ...data.capabilities.storage,
+                ...profile.storageBudget,
+              }}
+            />
           )}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <PreviewLifetimeSelect
@@ -328,6 +363,53 @@ function Editor({
               />
             </label>
           </div>
+          {data.capabilities.storage && (
+            <fieldset className="grid gap-3 rounded border p-3 sm:grid-cols-2">
+              <legend className="px-1 text-sm">
+                {t('resourceProfiles.budget')}
+              </legend>
+              {(
+                ['workspaceMb', 'cacheMb', 'temporaryMb', 'dataMb'] as const
+              ).map((key) => (
+                <label key={key} className="grid gap-1 text-sm">
+                  {key === 'workspaceMb'
+                    ? t('storageRoles.workspace')
+                    : key === 'cacheMb'
+                      ? t('storageRoles.cache')
+                      : key === 'temporaryMb'
+                        ? t('storageRoles.temporary')
+                        : t('storageRoles.data')}{' '}
+                  (MiB)
+                  <input
+                    type="number"
+                    min={key === 'workspaceMb' ? 64 : 16}
+                    max={data.capabilities.storage![key]}
+                    value={
+                      profile.storageBudget?.[key] ??
+                      data.capabilities.storage![key]
+                    }
+                    className="rounded border bg-background p-2"
+                    onChange={(event) =>
+                      setProfile((p) => ({
+                        ...p,
+                        storageBudget: {
+                          workspaceMb: data.capabilities.storage!.workspaceMb,
+                          cacheMb: data.capabilities.storage!.cacheMb,
+                          temporaryMb: data.capabilities.storage!.temporaryMb,
+                          dataMb: data.capabilities.storage!.dataMb,
+                          ...p.storageBudget,
+                          [key]: Number(event.target.value),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+              ))}
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                {t('resourceProfiles.diskUnavailable')}
+              </p>
+            </fieldset>
+          )}
         </div>
         <p
           hidden={tab !== 'execution'}
