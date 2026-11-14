@@ -4,6 +4,8 @@ const http = require('node:http');
 const { createHash, randomBytes } = require('node:crypto');
 const { verificationPage } = require('./preview-verification.cjs');
 const { safeReceipt } = require('./preview-receipt.cjs');
+const { readFileSync } = require('node:fs');
+const path = require('node:path');
 const COOKIE = '__Host-mergeron_preview';
 const APP_COOKIE = '__Host-mergeron_preview_app_';
 const SESSION_PATH = '/.__mergeron_preview/session';
@@ -317,10 +319,24 @@ class PreviewGateway {
     if (
       req.method === 'GET' &&
       (req.url === '/.__mergeron_preview/receipt' ||
+        req.url === '/.__mergeron_preview/vite-plugin.mjs' ||
         req.url.startsWith('/.__mergeron_preview/verify?'))
     ) {
       const access = await this.access(req, target);
       if (!access) return this.error(res, 401);
+      if (req.url === '/.__mergeron_preview/vite-plugin.mjs') {
+        res.writeHead(200, {
+          'content-type': 'text/javascript; charset=utf-8',
+          'content-disposition':
+            'attachment; filename="preview-vite-plugin.mjs"',
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+          'referrer-policy': 'no-referrer',
+        });
+        return res.end(
+          readFileSync(path.join(__dirname, 'preview-vite-plugin.mjs'), 'utf8'),
+        );
+      }
       const nonce = randomBytes(16).toString('base64');
       const receipt = safeReceipt(
         access.transport.receipt,

@@ -966,7 +966,8 @@
             "title": "Verify the displayed generation and CSS",
             "paragraphs": [
               "Generation and browser verification shows the transferred-file receipt: Git copy, observed commit, fingerprint including uncommitted changes and synchronization time. Verify in the browser opens a diagnostic using your Mergeron preview access; the site login session remains separate.",
-              "The diagnostic compares the current source with the receipt and loaded CSS with fresh server responses. It identifies older generations and incomplete checks. The compiled generation remains unknown unless the application provides the expected HTML/CSS markers. HTTP 200 does not confirm rendering. An element selector and computed style value can be checked before and after reloading."
+              "The diagnostic compares the current source with the receipt and loaded CSS with fresh server responses. It identifies older generations and incomplete checks. The compiled generation remains unknown unless the application provides the expected HTML/CSS markers. HTTP 200 does not confirm rendering. An element selector and computed style value can be checked before and after reloading.",
+              "The hot reload chain separates synchronized files, server detection, the WebSocket and the expected computed style. With the Vite integration, Watch the next change observes for 30 seconds without reloading the document. A successful WebSocket connection alone does not confirm the new CSS. HMR steps remain unknown for Next.js and servers without an integration."
             ]
           },
           {

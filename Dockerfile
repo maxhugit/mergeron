@@ -366,6 +366,7 @@ COPY scripts/setup-admin.cjs ./scripts/setup-admin.cjs
 COPY scripts/codex-cli-dispatch.sh /usr/local/bin/codex-cli-dispatch
 COPY runtime/preview-profile.cjs runtime/preview-snapshot.py runtime/preview-gateway.cjs /app/runtime/
 COPY runtime/preview-receipt.cjs runtime/preview-verification.cjs runtime/preview-storage.cjs /app/runtime/
+COPY runtime/preview-vite-plugin.mjs /app/runtime/
 COPY runtime/managed-cli.cjs /app/runtime/managed-cli.cjs
 COPY scripts/resolve-managed-cli.cjs ./scripts/resolve-managed-cli.cjs
 COPY scripts/visual-check.mjs ./scripts/visual-check.mjs

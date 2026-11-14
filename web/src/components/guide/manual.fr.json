@@ -966,7 +966,8 @@
             "title": "Vérifier la génération et le CSS affichés",
             "paragraphs": [
               "Génération et vérification navigateur présente le reçu des fichiers transférés : copie Git, commit observé, empreinte incluant les changements non commités et date de synchronisation. Vérifier dans le navigateur ouvre un diagnostic avec votre accès Mergeron à la preview ; la session de connexion du site reste indépendante.",
-              "Le diagnostic compare la source actuelle au reçu et les feuilles CSS chargées aux réponses fraîches du serveur. Il signale les anciennes générations et les contrôles incomplets. La génération compilée reste inconnue si l’application ne fournit pas les marqueurs HTML/CSS attendus. Un HTTP 200 ne confirme pas le rendu. Un sélecteur et une valeur de style calculé peuvent être vérifiés avant puis après rechargement."
+              "Le diagnostic compare la source actuelle au reçu et les feuilles CSS chargées aux réponses fraîches du serveur. Il signale les anciennes générations et les contrôles incomplets. La génération compilée reste inconnue si l’application ne fournit pas les marqueurs HTML/CSS attendus. Un HTTP 200 ne confirme pas le rendu. Un sélecteur et une valeur de style calculé peuvent être vérifiés avant puis après rechargement.",
+              "La chaîne du hot reload sépare les fichiers synchronisés, la détection par le serveur, le WebSocket et le style calculé attendu. Avec l’intégration Vite, Surveiller le prochain changement observe pendant 30 secondes sans recharger le document. Une connexion WebSocket réussie ne confirme pas à elle seule le nouveau CSS. Pour Next.js et les serveurs sans intégration, les étapes HMR restent inconnues."
             ]
           },
           {

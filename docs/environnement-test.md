@@ -196,7 +196,63 @@ Le formulaire facultatif vérifie un sélecteur, une propriété CSS et sa valeu
 calculée, par exemple `#bouton-test`, `width`, `32px`. **Vérifier sans recharger**
 observe la page courante ; **Recharger la page puis vérifier** permet de constater
 la récupération. Ce contrôle ne modifie ni les sources ni les données de test.
-Il ne constitue pas encore un diagnostic complet du WebSocket de hot reload.
+La chaîne du hot reload distingue également la détection par le serveur, le
+WebSocket du navigateur et la valeur CSS calculée. Ces étapes nécessitent une
+intégration applicative ; une étape inconnue n’est jamais une réussite.
+
+### Diagnostic hot reload Vite
+
+Télécharger l’intégration depuis le diagnostic, ou copier l’[adaptateur autonome](../runtime/preview-vite-plugin.mjs) dans le projet
+prévisualisé, puis l’ajouter à sa configuration Vite, en conservant ses autres
+plugins et protections :
+
+```js
+import { mergeronPreview } from './tooling/preview-vite-plugin.mjs';
+
+export default {
+  plugins: [mergeronPreview()],
+};
+```
+
+Ce fichier ne dépend d’aucun paquet supplémentaire. Sans
+`MERGERON_PREVIEW_RECEIPT_PATH`, l’intégration est inactive. Elle s’applique
+uniquement au serveur de développement, sans changer les paramètres CORS,
+origines autorisées, TLS ou CSP du projet. Utiliser une copie relue et versionnée
+avec le projet, jamais un import de code distant à chaque démarrage.
+
+Le diagnostic utilise le vrai canal HMR Vite : une sonde et sa réponse doivent
+circuler par ce canal et par la preview. Une connexion directe de secours est
+signalée comme non conforme au parcours. Le serveur observe le remplacement
+atomique du reçu ; il ne relit pas simplement le dernier fichier à chaque requête
+pour présenter une génération comme détectée. Le navigateur distingue un état
+inactif, une mise à jour en cours, une mise à jour appliquée et une erreur Vite.
+L’événement « appliqué » ne prouve pas à lui seul que le CSS attendu est présent :
+renseigner le sélecteur, la propriété et la valeur attendue pour le confirmer.
+
+**Surveiller le prochain changement (30 s)** répète les observations pendant une
+durée bornée sans recharger ni modifier le projet. Modifier puis synchroniser les
+sources depuis l’agent. Un HTTP fonctionnel avec un WebSocket bloqué reste en
+échec à l’étape WebSocket ; un style incorrect reste en échec à l’étape CSS.
+
+L’adaptateur émet le marqueur HTML pendant sa transformation et ajoute le marqueur
+de génération au CSS simple réellement transformé. Un hot reload CSS conserve
+le document HTML et son marqueur initial. Lorsque le canal HMR, la détection,
+la génération du CSS chargé, sa réponse fraîche et la valeur attendue concordent,
+le résultat confirme le CSS actualisé et précise que le document HTML est
+conservé ; il ne réécrit jamais son marqueur pour simuler une recompilation.
+Les CSS modules, préprocesseurs et
+styles injectés par d’autres outils ne constituent pas une preuve de compilation
+avec cet adaptateur. Les étapes restent indépendantes ; elles ne prouvent jamais
+la recompilation de toutes les ressources du projet.
+
+Cette première intégration est testée avec Vite 8. Les projets Next.js et les
+autres serveurs gardent les contrôles génériques source/CSS ; leurs étapes HMR
+restent inconnues tant qu’un adaptateur correspondant n’est pas installé.
+
+Le scénario `node scripts/test-preview-hot-reload.mjs` utilise un vrai Vite,
+Chromium et un proxy HTTPS authentifié, avec la CSP du site active. Il vérifie le
+passage de 120 à 32 px sans rechargement du document, l’absence de détection d’une
+génération, le blocage du vrai WebSocket malgré un HTTP valide et la révocation.
 
 ### Contrat de marqueurs applicatifs
 
