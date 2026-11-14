@@ -1790,6 +1790,7 @@
           {
             "title": "Read the repository",
             "paragraphs": [
+              "Agent Git reviews use 8 KiB pages bound to the same frozen index. The agent must read every page before committing. An index or diff change invalidates the review; shared tool rules are supplied once with a revision, without changing permissions or confirmations.",
               "Synchronization separates the local commit, potentially stale local tracking references and the last remote commit confirmed by a Mergeron push or retrieval. Its timestamp records a historical observation; a restart or another branch or connection makes that comparison unknown.",
               "Local shows the working copy, current branch, changes and known references. The graph links commits to parents; select a commit to view details.",
               "Below the repository name, Local shows the branch and revision of this agent’s copy, or No local copy. The explorer shows the workspace name and relative path; hover to see the complete technical path.",

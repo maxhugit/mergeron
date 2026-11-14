@@ -331,6 +331,9 @@ export class ProjectConnectionToolsService {
         'connectionId',
         'operation',
         ...(local ? ['copyId'] : []),
+        ...(read.operation === 'local_staged_diff'
+          ? ['cursor', 'fingerprint']
+          : []),
         ...([
           'files',
           'local_diff',
@@ -443,7 +446,13 @@ export class ProjectConnectionToolsService {
           data = await this.git.commits(projectId, read.copyId!);
           break;
         case 'local_staged_diff':
-          data = await this.git.stagedDiff(projectId, read.copyId!, read.path);
+          data = await this.git.stagedDiffPage(
+            projectId,
+            read.copyId!,
+            read.path,
+            read.cursor,
+            read.fingerprint,
+          );
           break;
       }
       checkConnection();

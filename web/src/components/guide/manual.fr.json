@@ -1790,6 +1790,7 @@
           {
             "title": "Lire le dépôt",
             "paragraphs": [
+              "Les revues Git de l’agent se consultent par pages de 8 Kio liées au même index figé. L’agent doit lire toutes les pages avant le commit. Un index ou un diff modifié invalide la revue ; les règles communes des outils sont transmises une fois avec une révision, sans changement des droits ni des confirmations.",
               "Synchronisation distingue le commit local des références locales potentiellement obsolètes et du dernier commit distant confirmé par un push ou une récupération Mergeron. La date indique une observation historique ; un redémarrage, une autre branche ou connexion rendent cette comparaison inconnue.",
               "La vue Locale montre la copie de travail : branche courante, changements et références déjà connues. Le graphe relie les commits à leurs parents ; cliquer un commit permet d’en consulter les détails.",
               "Sous le nom du dépôt, Local indique la branche et la révision de la copie de cet agent, ou Aucune copie locale. L’explorateur affiche le nom de l’emplacement et le chemin relatif ; le chemin technique complet reste au survol.",

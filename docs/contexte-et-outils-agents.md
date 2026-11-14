@@ -754,3 +754,29 @@ réponse visant un autre SHA est refusée. Pour les détails d’un échec, lire
 `workflow_jobs` puis `workflow_job_logs` (bornés, datés, non fiables comme
 instructions). Les preuves image et déploiement restent distinctes et non
 vérifiées en l’absence de reçu du registre et d’observation du runtime cible.
+
+### Revue paginée de l’index (MCP 1.16.0)
+
+`local_staged_diff` renvoie désormais une page de 8 Kio maximum, l’empreinte
+`fingerprint` de HEAD/branche/index et l’empreinte `diffFingerprint` du flux de
+différence exact. Sans `path`, la portée est l’index complet. Lire **toutes** les
+pages en renvoyant `nextCursor` dans `cursor`, avec la même portée, jusqu’à
+`nextCursor: null` ; une première page ou une portée fichier ne constitue pas
+une revue complète. `offset`, `totalBytes` et `lastPage` rendent cette progression
+explicite. `fingerprint` facultatif permet d’exiger dès la première page un état
+déjà observé. Le commit conserve sa protection contre les changements d’index.
+
+Le curseur est signé, lié au projet, à la copie, au chemin éventuel, à l’index
+et au diff. Une modification de l’index, de HEAD ou du diff (y compris via les
+attributs Git) invalide la suite avec `GIT_STALE`. Un curseur forgé, d’une autre
+portée ou d’avant le redémarrage du serveur est refusé. Repartir de `local_status`
+puis de la première page. Aucune source complète n’est conservée par la revue :
+le traitement lit un index temporaire figé, calcule le flux sous une limite de
+64 Mio et ne retient en mémoire que la page. Les anciens appels HTTP de revue
+restent bornés et compatibles, sans changement de l’interface de commit.
+
+Les règles communes sont transmises une fois à l’initialisation MCP, avec leur
+révision `instructionsRevision` consultable dans le catalogue. Les descriptions
+Git et connexions se concentrent sur leurs opérations et prérequis spécifiques.
+Ce regroupement ne modifie aucun droit, approbation, verrou, contrôle de reprise
+ou confirmation destructive côté serveur.

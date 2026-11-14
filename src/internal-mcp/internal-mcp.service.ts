@@ -481,6 +481,7 @@ export class InternalMcpService implements OnModuleDestroy {
                 'GIT_OUTPUT_LIMIT_EXCEEDED',
                 'GIT_COMMAND_TIMEOUT',
                 'GIT_STALE',
+                'GIT_REVIEW_CURSOR_INVALID',
                 'GIT_WORKTREE_DIRTY',
                 'GIT_BRANCH_EXISTS',
                 'GIT_BRANCH_NAME_INVALID',
