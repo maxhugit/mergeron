@@ -1,3 +1,4 @@
+import { GitCommitDelivery } from './git-commit-delivery';
 import { agentContextKey, getAgentContext } from '@/lib/agent-context-api';
 import { usePlatformSession } from '@/lib/platform-session';
 import { AgentInstructionsDialog } from './agent-instructions-dialog';
@@ -1083,6 +1084,18 @@ function RepositoryPanel({
                   </p>
                 </div>
               )}
+              {resource.type === 'git' &&
+                snapshot.data?.head &&
+                !snapshot.error && (
+                  <GitCommitDelivery
+                    key={`${resource.id}:${snapshot.data.remoteObservation?.sha ?? snapshot.data.head}`}
+                    projectId={projectId}
+                    resourceId={resource.id}
+                    revision={
+                      snapshot.data.remoteObservation?.sha ?? snapshot.data.head
+                    }
+                  />
+                )}
               {writable && copy && snapshot.data && !snapshot.error && (
                 <GitCopyActions
                   key={`publish:${copy.id}`}

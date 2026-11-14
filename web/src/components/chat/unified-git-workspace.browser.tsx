@@ -28,7 +28,10 @@ const state = vi.hoisted(() => ({
   requests: [] as Array<{ url: string; method?: string }>,
 }));
 const activeFolder = vi.hoisted(() => vi.fn());
-vi.mock('@/generated/api', () => ({ filesAddRoot: async () => ({}) }));
+vi.mock('@/generated/api', () => ({
+  workspaceGitCommitDelivery1: vi.fn(),
+  filesAddRoot: async () => ({}),
+}));
 vi.mock('@/components/files/file-tree', () => ({
   FileTree: () => <div>Fichiers locaux consultés</div>,
 }));

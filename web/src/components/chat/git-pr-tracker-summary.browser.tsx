@@ -24,7 +24,10 @@ vi.mock('@/lib/projects-api', () => ({
   projectsApi: api,
   projectsQueryKey: ['projects'],
 }));
-vi.mock('@/generated/api', () => ({ filesAddRoot: async () => ({}) }));
+vi.mock('@/generated/api', () => ({
+  workspaceGitCommitDelivery1: vi.fn(),
+  filesAddRoot: async () => ({}),
+}));
 vi.mock('@/lib/file-watch-leases', () => ({
   acquireFileWatch: () => () => {},
 }));

@@ -1889,6 +1889,7 @@
           {
             "title": "Lire le distant",
             "paragraphs": [
+              "Livraison de ce commit, dans Synchronisation, vérifie le SHA exact sur GitHub et présente ses Actions paginées sans PR ouverte. Les statuts, conclusions et dates sont séparés des étapes image et déploiement : celles-ci restent non vérifiées sans reçu du registre et observation de la cible.",
               "La vue GitHub propose les onglets Fichiers, Branches, PR et Merges, dans cet ordre. Elle ne remplace pas la copie locale utilisée par l’agent. Le menu Informations permet de retrouver les coordonnées de la connexion.",
               "Les actions de récupération et de synchronisation sont explicites. Relisez le dialogue : récupérer des références, préparer une branche locale et intégrer des commits ne sont pas la même opération."
             ]

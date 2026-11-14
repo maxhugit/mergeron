@@ -51,6 +51,7 @@ describe('project connection agent tools', () => {
     pullRequest: vi.fn(),
     checks: vi.fn(),
     readActions: vi.fn(),
+    commitDelivery: vi.fn(),
     diff: vi.fn(),
     stagedDiff: vi.fn(),
     commits: vi.fn(),
@@ -793,6 +794,58 @@ describe('project connection agent tools', () => {
         path: 'wrong',
       }),
     ).rejects.toThrow();
+  });
+
+  it('reads commit-bound delivery without a copy, and requires an immutable revision', async () => {
+    own = [];
+    git.commitDelivery.mockImplementation(
+      async (
+        _p: string,
+        _c: string,
+        _r: string,
+        _page: number,
+        check: () => void,
+      ) => {
+        check();
+        return { revision: 'a'.repeat(40) };
+      },
+    );
+    expect(
+      await call({
+        tool: 'read_project_git',
+        connectionId,
+        operation: 'commit_delivery',
+        ref: 'a'.repeat(40),
+        page: 2,
+      }),
+    ).toMatchObject({
+      operation: 'commit_delivery',
+      data: { revision: 'a'.repeat(40) },
+      untrustedContent: true,
+    });
+    expect(git.commitDelivery).toHaveBeenCalledWith(
+      'p',
+      connectionId,
+      'a'.repeat(40),
+      2,
+      expect.any(Function),
+    );
+    await expect(
+      call({
+        tool: 'read_project_git',
+        connectionId,
+        operation: 'commit_delivery',
+      }),
+    ).rejects.toThrow('immutable commit');
+    await expect(
+      call({
+        tool: 'read_project_git',
+        connectionId,
+        operation: 'commit_delivery',
+        ref: 'a'.repeat(40),
+        runId: 1,
+      }),
+    ).rejects.toThrow('Invalid operation fields');
   });
 
   it.each([

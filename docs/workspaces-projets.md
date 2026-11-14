@@ -267,3 +267,25 @@ Une nouvelle branche, une autre connexion, un redémarrage de Mergeron ou un obj
 Git devenu indisponible rendent la comparaison distante inconnue. Un push externe
 au parcours Mergeron ne produit pas de preuve de fraîcheur. Aucun compteur local
 n’est présenté comme une lecture actuelle du serveur.
+
+## Actions et livraison d’un commit
+
+Dans Synchronisation, **Livraison de ce commit** vérifie le SHA complet sur le
+dépôt GitHub de la connexion et liste ses exécutions Actions, tous événements
+confondus, sans exiger de PR ouverte. La lecture utilise le jeton conservé côté
+serveur et nécessite les droits dépôt et Actions en lecture. La liste est paginée
+(50 éléments, 20 pages maximum), datée et explicitement partielle si nécessaire.
+Les statuts et conclusions restent distincts ; les liens ouvrent l’exécution
+exacte. Une réponse GitHub portant sur un autre SHA est refusée.
+
+Le MCP `read_project_git` expose aussi `commit_delivery` avec `ref` immuable et
+`page` facultative. Pour examiner un échec, poursuivre avec `workflow_jobs` puis
+`workflow_job_logs` ; les tentatives, étapes et extraits tronqués restent visibles.
+Aucune relance, annulation ou publication n’est déclenchée par cette lecture.
+
+Un workflow vert confirme uniquement son résultat CI. Une publication d’image
+nécessite une preuve du registre liant le SHA au digest immuable ; un déploiement
+nécessite l’observation du digest réellement exécuté dans sa cible. Aucun lecteur
+de reçus générique de ces deux systèmes n’étant configuré pour les projets,
+ces étapes restent **non vérifiées**. Un texte de log ou le nom « deploy » d’un
+job ne deviennent jamais une preuve de publication ou d’exécution.

@@ -221,3 +221,96 @@ it('uses only the registered repository and its server-held token, without a loc
   );
   expect(JSON.stringify(result)).not.toContain('private-token');
 });
+
+it('rejects a workflow from another commit even if GitHub returned it for a SHA filter', async () => {
+  await expect(
+    read({ operation: 'workflow_runs', ref: revision }, () =>
+      Promise.resolve({
+        total_count: 1,
+        workflow_runs: [{ ...run, head_sha: 'b'.repeat(40) }],
+      }),
+    ),
+  ).rejects.toThrow('GIT_GITHUB_INVALID_RESPONSE');
+});
+it('binds published commit and CI observations, without promoting green CI to deployment evidence', async () => {
+  const resolve = vi.fn(() => ({
+    resource: {
+      enabled: true,
+      type: 'git',
+      address: 'https://github.com/owner/repo.git',
+    },
+    secret: { token: 'delivery-token' },
+  }));
+  const fetch = vi.fn((url: string) =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify(
+          url.includes('/commits/')
+            ? { sha: revision }
+            : {
+                total_count: 1,
+                workflow_runs: [{ ...run, conclusion: 'success' }],
+              },
+        ),
+      ),
+    ),
+  );
+  vi.stubGlobal('fetch', fetch);
+  const service = new WorkspaceGitService(
+    {} as WorkspaceCopiesService,
+    { resolveForTransfer: resolve } as unknown as WorkspaceResourcesService,
+  );
+  const result = await service.commitDelivery('p', 'c', revision, 1, () => {});
+  expect(result).toMatchObject({
+    revision,
+    actions: { items: [{ revision, conclusion: 'success' }] },
+    image: { state: 'unverified' },
+    deployment: { state: 'unverified' },
+  });
+  expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+    `https://api.github.com/repos/owner/repo/commits/${revision}`,
+    `https://api.github.com/repos/owner/repo/actions/runs?per_page=50&page=1&head_sha=${revision}`,
+  ]);
+  expect(JSON.stringify(result)).not.toContain('delivery-token');
+});
+it('refuses changed commit identity and revoked connection during delivery reads', async () => {
+  const resolved = {
+    resource: {
+      enabled: true,
+      type: 'git',
+      address: 'https://github.com/owner/repo.git',
+    },
+    secret: { token: 'delivery-token' },
+  };
+  const service = new WorkspaceGitService(
+    {} as WorkspaceCopiesService,
+    {
+      resolveForTransfer: () => resolved,
+    } as unknown as WorkspaceResourcesService,
+  );
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ sha: 'b'.repeat(40) }))),
+    ),
+  );
+  await expect(
+    service.commitDelivery('p', 'c', revision, 1, () => {}),
+  ).rejects.toThrow('GIT_GITHUB_INVALID_RESPONSE');
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => {
+      resolved.resource.address = 'https://github.com/owner/other.git';
+      return Promise.resolve(new Response(JSON.stringify({ sha: revision })));
+    }),
+  );
+  const fresh = new WorkspaceGitService(
+    {} as WorkspaceCopiesService,
+    {
+      resolveForTransfer: () => resolved,
+    } as unknown as WorkspaceResourcesService,
+  );
+  await expect(
+    fresh.commitDelivery('p', 'c', revision, 1, () => {}),
+  ).rejects.toThrow('GIT_STALE');
+});

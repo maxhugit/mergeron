@@ -11,7 +11,10 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { WorkspaceGitPanel } from './workspace-git-panel';
-vi.mock('@/generated/api', () => ({ filesAddRoot: async () => ({}) }));
+vi.mock('@/generated/api', () => ({
+  filesAddRoot: async () => ({}),
+  workspaceGitCommitDelivery1: vi.fn(),
+}));
 vi.mock('@/lib/file-watch-leases', () => ({
   acquireFileWatch: () => () => {},
 }));

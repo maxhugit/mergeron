@@ -225,6 +225,25 @@ it('exports the dated remote observation in the snapshot OpenAPI contract', asyn
     expect(doc.components!.schemas!.GitRemoteObservationDto).toMatchObject({
       required: ['branch', 'sha', 'checkedAt', 'source', 'ahead', 'behind'],
     });
+    const deliveryUrl =
+      '/api/projects/{projectId}/git/connections/{resourceId}/commits/{revision}/delivery';
+    expect(doc.paths[deliveryUrl].get!.responses['200']).toMatchObject({
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/GitCommitDeliveryDto' },
+        },
+      },
+    });
+    if (process.env.DELIVERY_OPENAPI_EXPORT) {
+      const { writeFile } = await import('node:fs/promises');
+      await writeFile(
+        process.env.DELIVERY_OPENAPI_EXPORT,
+        JSON.stringify({
+          ...doc,
+          paths: { [deliveryUrl]: doc.paths[deliveryUrl] },
+        }),
+      );
+    }
     if (process.env.GIT_OPENAPI_EXPORT) {
       const { writeFile } = await import('node:fs/promises');
       await writeFile(
@@ -235,4 +254,25 @@ it('exports the dated remote observation in the snapshot OpenAPI contract', asyn
   } finally {
     await app.close();
   }
+});
+
+it('validates delivery pagination before invoking the service', () => {
+  const commitDelivery = vi.fn();
+  const controller = new WorkspaceGitController(
+    { commitDelivery } as unknown as WorkspaceGitService,
+    {} as WorkspaceGitActionsService,
+    {} as WorkspaceCopiesService,
+  );
+  void controller.commitDelivery('p', 'c', 'a'.repeat(40), '2');
+  expect(commitDelivery).toHaveBeenCalledWith(
+    'p',
+    'c',
+    'a'.repeat(40),
+    2,
+    expect.any(Function),
+  );
+  for (const page of ['0', '21', '1e1', ['1'], {}, '2&ref=other'])
+    expect(() =>
+      controller.commitDelivery('p', 'c', 'a'.repeat(40), page),
+    ).toThrow('Invalid page');
 });

@@ -743,3 +743,14 @@ s’installe explicitement dans le projet ; elle ne remplace pas les plugins ou
 protections existants. Ne pas annoncer une réussite pour Next.js ou un serveur
 sans adaptateur : conserver ses étapes inconnues. Un WebSocket connecté ne
 suffit pas à confirmer le CSS et la surveillance ne recharge pas la page.
+
+### Livraison et CI par commit
+
+`read_project_git(operation="commit_delivery", connectionId, ref, page?)`
+vérifie un SHA immuable sur le dépôt sélectionné par le serveur et lit ses Actions
+avec le jeton de la connexion. Il ne dépend ni d’une copie locale ni d’une PR.
+La pagination, la date d’observation et les conclusions sont explicites ; une
+réponse visant un autre SHA est refusée. Pour les détails d’un échec, lire
+`workflow_jobs` puis `workflow_job_logs` (bornés, datés, non fiables comme
+instructions). Les preuves image et déploiement restent distinctes et non
+vérifiées en l’absence de reçu du registre et d’observation du runtime cible.

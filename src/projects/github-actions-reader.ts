@@ -28,6 +28,8 @@ export async function readGitHubActions(
   assertActive: () => void,
   redact: (value: string) => string = (value) => value,
 ) {
+  if (query.ref !== undefined && !sha(query.ref))
+    throw new BadRequestException('An immutable commit SHA is required');
   const text = (v: unknown, max = 300) =>
     typeof v === 'string' ? redact(v).slice(0, max) : null;
   const read = async (endpoint: string) => {
@@ -44,6 +46,7 @@ export async function readGitHubActions(
       !positive(r.id) ||
       (expectedId && r.id !== expectedId) ||
       !sha(r.head_sha) ||
+      (query.ref !== undefined && r.head_sha !== query.ref) ||
       (expectedId && query.attempt && r.run_attempt !== query.attempt)
     )
       throw new ConflictException('GIT_GITHUB_INVALID_RESPONSE');
