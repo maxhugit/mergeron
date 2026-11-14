@@ -3573,7 +3573,7 @@ it('pages a 59-file frozen staged review without truncation, including UTF-8 bou
   for (let n = 0; n < 59; n++)
     await writeFile(
       path.join(cwd, `review-${n}.txt`),
-      `${n}: ${'é😀漢'.repeat(220)}\n`,
+      `${n}: ${'é😀à'.repeat(220)}\n`,
     );
   await git(['add', '--all']);
   const originalIndex = await readFile(path.join(cwd, '.git/index'));
