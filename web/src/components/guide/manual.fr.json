@@ -870,6 +870,15 @@
               "Gestion des agents sépare Configuration, Connaissances partagées, Propositions et Intégrations. Les trois fichiers d’instructions, connaissances et décisions disposent de leur propre sous-onglet ; leurs brouillons restent présents quand vous passez de l’un à l’autre. Enregistrer applique les trois fichiers ensemble avec la révision observée ; Annuler abandonne le brouillon local.",
               "Propositions affiche directement chaque contenu avant/après, sans bouton pour l’ouvrir ou le fermer. Les actions restent auprès de la proposition concernée. Enregistrez une modification de proposition avant de l’accepter. Une proposition périmée ou un brouillon de connaissances non enregistré bloque son acceptation. Recharger et Précédent/Suivant restent disponibles."
             ]
+          },
+          {
+            "title": "Associer et suivre les consignes de l’agent",
+            "paragraphs": [
+              "Les consignes communes restent dans Paramètres → Codex → Instructions. Mon profil → Préférences des agents permet de définir la langue et les préférences personnelles utilisées pour vos échanges, y compris dans un agent partagé.",
+              "Dans la sidebar droite de l’agent, onglet Sources, ouvrez le menu du dépôt puis Utiliser une copie comme source de consignes. Choisissez une copie Git prête du projet : l’agent conserve son dossier actif. Les connaissances partagées du projet et les fichiers Git restent distincts.",
+              "Consignes de cet agent présente l’aperçu Git, les empreintes et le journal. Vérifié ne signifie pas fourni : une vérification manuelle ne transmet rien au modèle. Le serveur relit les sources avant chaque échange ; le parcours MCP fournit le contexte lors de l’appel project_context_read, le parcours sans MCP le transmet directement.",
+              "Après compactage détecté, le contexte est à rétablir au prochain appel MCP ou échange. L’agent demande les fichiers AGENTS spécialisés avec instructionDirectory avant une intervention dans un sous-dossier. Une source associée inaccessible bloque le nouvel échange ; rétablissez son accès ou retirez l’association. Les consignes ne modifient jamais les permissions."
+            ]
           }
         ],
         "related": [

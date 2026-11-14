@@ -123,6 +123,18 @@ Une connexion de projet n’est ni un dossier de travail ni une autorisation imp
 
 Les identifiants sont chiffrés côté serveur ; les fichiers temporaires de clé, empreintes et configuration ont des permissions privées et sont retirés après usage. SSH ignore la configuration utilisateur, les agents d’authentification ambiants et les redirections ; les empreintes sont vérifiées strictement. Aucun hôte ni identifiant n’est fourni par l’agent. Les sorties et la durée sont bornées, la révocation est revérifiée et les demandes sont réservées avant l’envoi pour empêcher une répétition après un résultat incertain. FTPS conserve la validation TLS ; FTP reste un choix explicitement non chiffré.
 
+
+## Consignes Git associées aux agents
+
+Une source de consignes est une copie locale enregistrée dans le même projet,
+validée à chaque lecture par les contrôles Git et de chemins existants. Elle
+n’accorde aucun droit d’écriture et ne change pas le dossier actif. Les lectures
+AGENTS sont bornées, refusent liens symboliques, liens durs et fichiers spéciaux ;
+les parcours Linux épinglent les descripteurs de dossiers. Les préférences sont
+celles du demandeur authentifié ; elles ne sont jamais une autorité d’exécution.
+Le journal conserve uniquement les métadonnées de vérification et de remise,
+sans consignes ou préférences brutes. Voir les [limites et déclencheurs](docs/consignes-agents.md).
+
 ## Reçus de preview et vérification navigateur
 
 Les reçus de transfert sont bornés et liés à l’archive, à l’empreinte de source,

@@ -1,3 +1,7 @@
+import {
+  AgentContextService,
+  type AgentContextSnapshot,
+} from '../project-knowledge/agent-context.service';
 /**
  * Handles thread and turn operations by delegating to Codex app-server.
  */
@@ -163,6 +167,7 @@ export class ThreadsService {
     @Optional()
     private readonly preferences?: ThreadExecutionPreferencesService,
     @Optional() @Inject(DRIZZLE_DB) private readonly db?: AppDatabase,
+    @Optional() private readonly agentContext?: AgentContextService,
   ) {}
 
   /**
@@ -683,19 +688,33 @@ export class ThreadsService {
       : null;
     // Keep the legacy path only when this turn has no usable internal MCP lease
     // (including local runtimes). Publication remains prepared per turn below.
+    let contextSnapshot: AgentContextSnapshot | undefined;
     let commonInstructions: string | undefined;
     let sharedKnowledge: string | null | undefined;
     let projectContext: string | null | undefined;
     try {
+      if (projectPolicy && this.agentContext)
+        contextSnapshot = await this.agentContext.prepare(
+          params.threadId,
+          'turn',
+        );
       commonInstructions = mcpLease
         ? AGENT_CONTEXT_REMINDER
-        : this.agentInstructions?.context();
-      sharedKnowledge = mcpLease
-        ? null
-        : await this.knowledge?.contextForConversation(
-            effectiveCwd,
-            params.threadId,
-          );
+        : (contextSnapshot?.context ?? this.agentInstructions?.context());
+      sharedKnowledge =
+        mcpLease || contextSnapshot
+          ? null
+          : await this.knowledge?.contextForConversation(
+              effectiveCwd,
+              params.threadId,
+            );
+      if (mcpLease && contextSnapshot)
+        commonInstructions = (
+          commonInstructions ?? AGENT_CONTEXT_REMINDER
+        ).replace(
+          '</mergeron_context_refresh>',
+          `Current instruction snapshot verified: ${contextSnapshot.revision}. Call project_context_read before acting; this verification is not a transmission of its contents.\n</mergeron_context_refresh>`,
+        );
       projectContext = mcpLease
         ? null
         : await this.projectTools?.context(params.threadId, effectiveCwd);
@@ -843,6 +862,15 @@ export class ThreadsService {
         : send());
       publication?.bind(response.turn.id);
       mcpLease?.bind(response.turn.id);
+      if (contextSnapshot && !mcpLease) {
+        try {
+          this.agentContext?.supplied(contextSnapshot, 'turn');
+        } catch {
+          this.logger.warn(
+            'Turn accepted, but instruction delivery receipt could not be saved',
+          );
+        }
+      }
     } catch (error) {
       publication?.abort();
       mcpLease?.abort();

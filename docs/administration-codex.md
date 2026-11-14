@@ -422,12 +422,15 @@ fichier géré par Mergeron avec celui du dépôt.
 
 Exemple : pour un agent de développement ayant pour référence une copie locale
 du dépôt Mergeron, conserver les règles d’organisation propres au projet dans
-ses connaissances partagées et les règles techniques communes dans Git. Après
-modification des consignes du dépôt, demander leur relecture à un agent déjà
-ouvert ; ne pas supposer un rechargement automatique dans une session existante.
-Les runtimes locaux ne doivent pas être supposés découvrir nativement les
-AGENTS.md du dépôt comme Codex : leur demander explicitement de lire les fichiers
-accessibles nécessaires à la tâche.
+ses connaissances partagées et les règles techniques communes dans Git. Sans association explicite de source Git, demander la relecture des fichiers
+modifiés et ne pas supposer de découverte native par tous les runtimes. Avec
+association, Mergeron vérifie et fournit les consignes selon le cycle décrit
+dans le guide ci-dessous, y compris lorsque le dossier actif est un livrable.
 
 Ces textes guident le comportement ; ils n’accordent aucune permission
 supplémentaire et ne remplacent pas les contrôles techniques.
+
+Le [paramétrage des consignes des agents](consignes-agents.md) permet maintenant
+d’associer explicitement une copie Git indépendamment du dossier actif, de définir
+les préférences personnelles et de consulter les versions vérifiées ou fournies.
+
