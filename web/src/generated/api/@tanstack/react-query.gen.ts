@@ -2111,3 +2111,25 @@ export const mcpServersStartOauthLoginMutation = (options?: Partial<Options<McpS
     };
     return mutationOptions;
 };
+
+
+import { previewsDiagnostics } from '../sdk.gen';
+import type { PreviewsDiagnosticsData, PreviewsDiagnosticsResponse } from '../types.gen';
+
+export const previewsDiagnosticsQueryKey = (options: Options<PreviewsDiagnosticsData>) => createQueryKey('previewsDiagnostics', options);
+
+/**
+ * Read preview execution and termination diagnostics without executing project commands
+ */
+export const previewsDiagnosticsOptions = (options: Options<PreviewsDiagnosticsData>) => queryOptions<PreviewsDiagnosticsResponse, DefaultError, PreviewsDiagnosticsResponse, ReturnType<typeof previewsDiagnosticsQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+        const { data } = await previewsDiagnostics({
+            ...options,
+            ...queryKey[0],
+            signal,
+            throwOnError: true
+        });
+        return data;
+    },
+    queryKey: previewsDiagnosticsQueryKey(options)
+});

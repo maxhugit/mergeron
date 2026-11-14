@@ -508,3 +508,46 @@ test('image and CI ship the launcher, retained package-manager seed and executab
     /node --test scripts\/environment-check.test.mjs/,
   );
 });
+
+test('launcher recovers from a missing Node PATH and an inherited production mode without polluting stdout', async () =>
+  fixture(async (root) => {
+    const launcher = resolve('scripts/mergeron-agent-environment.sh');
+    const result = spawnSync(
+      '/bin/bash',
+      [
+        launcher,
+        process.execPath,
+        '-e',
+        'console.log(JSON.stringify({mode:process.env.NODE_ENV,node:process.execPath,path:process.env.PATH}))',
+      ],
+      {
+        encoding: 'utf8',
+        env: {
+          TMPDIR: root,
+          PATH: '/missing',
+          NODE_ENV: 'production',
+          MERGERON_AGENT_NODE_BINARY: process.execPath,
+        },
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.mode, 'development');
+    assert.equal(report.node, process.execPath);
+    assert.ok(
+      report.path.includes(
+        process.execPath.slice(0, process.execPath.lastIndexOf('/')),
+      ),
+    );
+    const invalid = spawnSync('/bin/bash', [launcher, '/bin/true'], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        TMPDIR: root,
+        MERGERON_AGENT_NODE_ENV: 'invalid-secret-value',
+      },
+    });
+    assert.equal(invalid.status, 65);
+    assert.equal(invalid.stdout, '');
+    assert.equal(invalid.stderr.includes('invalid-secret-value'), false);
+  }));

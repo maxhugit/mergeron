@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   agentEnvironmentCommand,
+  agentChildEnvironment,
   AGENT_ENVIRONMENT_LAUNCHER,
 } from './agent-environment';
 import { documentIsolationArgs } from '../document-publication/document-isolation';
@@ -53,4 +54,21 @@ describe('agent cache launcher', () => {
       args: ['app-server'],
     });
   });
+});
+
+it('pins the child Node without changing backend production mode or losing custom PATH entries', () => {
+  const env = {
+    NODE_ENV: 'production',
+    PATH: '/custom/tools',
+    CODEX_HOME: '/home/test',
+  };
+  const child = agentChildEnvironment(env);
+  expect(child.NODE_ENV).toBe('development');
+  expect(child.MERGERON_AGENT_NODE_BINARY).toBe(process.execPath);
+  expect(child.PATH).toContain('/custom/tools');
+  expect(child.CODEX_HOME).toBe('/home/test');
+  expect(env.NODE_ENV).toBe('production');
+  expect(
+    agentChildEnvironment({ MERGERON_AGENT_NODE_ENV: 'test' }).NODE_ENV,
+  ).toBe('test');
 });

@@ -4408,3 +4408,66 @@ export type AgentContextVerifyResponses = {
 
 export type AgentContextVerifyResponse =
   AgentContextVerifyResponses[keyof AgentContextVerifyResponses];
+
+export type PreviewVerificationOpenDto = {
+    url: string;
+    /**
+     * Expiry as Unix milliseconds
+     */
+    expiresAt: number;
+};
+
+export type PreviewsVerifyData = {
+    body?: never;
+    path: {
+        projectId: string;
+        threadId: string;
+    };
+    query?: never;
+    url: '/api/projects/{projectId}/agents/{threadId}/preview/verify';
+};
+
+export type PreviewsVerifyResponses = {
+    201: PreviewVerificationOpenDto;
+};
+
+export type PreviewsVerifyResponse = PreviewsVerifyResponses[keyof PreviewsVerifyResponses];
+
+
+export type PreviewExecutionDto = {
+    runtime: string;
+    nodeEnv: 'development' | 'production' | 'test' | 'unknown';
+    directory: string;
+    updateMode: string;
+};
+
+export type PreviewTerminationDto = {
+    cause: 'memory_limit' | 'process_exit' | 'startup_timeout' | 'expired' | 'user_stop';
+    observedAt: number;
+    exitCode: number | null;
+    oomKilled: boolean;
+    finishedAt: string | null;
+};
+
+export type PreviewDiagnosticsDto = {
+    runId: string | null;
+    state: string;
+    execution: PreviewExecutionDto | null;
+    termination: PreviewTerminationDto | null;
+};
+
+export type PreviewsDiagnosticsData = {
+    body?: never;
+    path: {
+        projectId: string;
+        threadId: string;
+    };
+    query?: never;
+    url: '/api/projects/{projectId}/agents/{threadId}/preview/diagnostics';
+};
+
+export type PreviewsDiagnosticsResponses = {
+    200: PreviewDiagnosticsDto;
+};
+
+export type PreviewsDiagnosticsResponse = PreviewsDiagnosticsResponses[keyof PreviewsDiagnosticsResponses];

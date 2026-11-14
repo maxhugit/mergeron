@@ -245,3 +245,20 @@ test('busy, expired and quota-limited runs cannot create extra terminals; output
   }
   assert.equal(f.inspector.sessions.size, 0);
 });
+
+test('stopped containers retain Docker OOM and the configured limit; absent live usage is unknown', async () => {
+  const f = fixture();
+  f.manager.owned = async () => ({
+    Config: { Image: 'runtime' },
+    HostConfig: { Memory: 1024 },
+    State: { Running: false, OOMKilled: true, Status: 'exited', ExitCode: 137 },
+  });
+  f.manager.docker.request = async () => {
+    throw Error('stopped containers must not be sampled');
+  };
+  const { containers } = await f.inspector.containers({ runId: 'run' });
+  assert.equal(containers[0].memory.oomKilled, true);
+  assert.equal(containers[0].memory.limitBytes, 1024);
+  assert.equal(containers[0].memory.usageBytes, null);
+  assert.equal(containers[0].terminalAvailable, false);
+});

@@ -38,3 +38,9 @@ export type {
   AgentContextVerifyResponses,
   AgentContextVerifyResponse,
 } from "./types.gen";
+
+export { previewsVerify } from './sdk.gen';
+export type { PreviewsVerifyData, PreviewsVerifyResponse, PreviewsVerifyResponses, PreviewVerificationOpenDto } from './types.gen';
+
+export { previewsDiagnostics } from './sdk.gen';
+export type { PreviewExecutionDto, PreviewTerminationDto, PreviewDiagnosticsDto, PreviewsDiagnosticsData, PreviewsDiagnosticsResponses, PreviewsDiagnosticsResponse } from './types.gen';

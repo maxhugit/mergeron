@@ -117,7 +117,6 @@ suivis séparément des constats concernant `sshd`.
 - secret OnlyOffice ;
 - jetons OAuth et MCP.
 
-
 ## Accès distants des agents
 
 Une connexion de projet n’est ni un dossier de travail ni une autorisation implicite d’exécution. Les opérations SSH/SFTP/FTP/FTPS des agents exigent l’activation explicite de cette disponibilité, un tour administrateur modifiable sans impersonation et une approbation du transport. Les commandes SSH exigent aussi le mode lecture et écriture ; elles ne sont pas isolées par la racine autorisée aux fichiers. Le compte distant doit imposer les droits adaptés à l’usage.
@@ -135,3 +134,51 @@ les parcours Linux épinglent les descripteurs de dossiers. Les préférences so
 celles du demandeur authentifié ; elles ne sont jamais une autorité d’exécution.
 Le journal conserve uniquement les métadonnées de vérification et de remise,
 sans consignes ou préférences brutes. Voir les [limites et déclencheurs](docs/consignes-agents.md).
+
+## Reçus de preview et vérification navigateur
+
+Les reçus de transfert sont bornés et liés à l’archive, à l’empreinte de source,
+à la copie autorisée et au run courant. Ils sont enregistrés après un transfert
+complet ; un échec conserve la génération précédente et son erreur. Ils ne
+contiennent aucun secret et n’accordent aucun droit. Le diagnostic HTTPS utilise
+la session personnelle existante, revérifie l’identité et la source et ne remet
+aucune capacité à l’agent ou à l’application. Les marqueurs HTML/CSS appartiennent
+au projet et restent des observations non fiables pour toute décision de droits.
+Leurs concordances ne prouvent pas la totalité d’une compilation. Les ressources
+illisibles restent inconnues ; CSP, TLS et contrôles d’origine ne sont pas réduits.
+
+Le diagnostic HMR n’injecte aucun code dans un projet sans intégration explicite.
+L’adaptateur Vite conserve les protections du serveur et de l’application. Ses
+relevés sont des observations applicatives sans autorité : seules des propriétés
+bornées et autorisées passent entre le cadre et le diagnostic, avec origine,
+fenêtre source et identifiant de requête vérifiés. Les messages HMR bruts, chemins,
+en-têtes, cookies et jetons ne sont pas relayés. Une connexion de secours hors de
+la preview ne valide pas le parcours public ; les observations absentes restent
+inconnues. La surveillance est bornée et ne modifie pas les données du projet.
+
+## Journaux GitHub Actions
+
+Les lectures MCP Actions restent liées à une connexion GitHub et au projet du
+tour authentifié. Aucune URL ou identité de dépôt fournie par l’agent n’est
+utilisée pour envoyer un jeton ; le couple run/job est contrôlé avant lecture.
+Le lien signé de logs, obtenu uniquement depuis l’API GitHub, est limité aux
+hôtes HTTPS `productionresultssa<N>.blob.core.windows.net` et n’est pas exposé.
+Le stockage ne reçoit pas l’en-tête d’autorisation GitHub et ne peut pas
+rediriger la requête. La règle Squid dédiée reste après les refus privés ;
+aucune autorisation générale Azure Blob n’est ajoutée. Les contenus sont bornés,
+non conservés et marqués non fiables. Le masquage du jeton de connexion connu
+et des formats usuels de jetons ne peut pas détecter tout secret arbitraire
+qu’un workflow imprimerait : les auteurs doivent préserver le masquage GitHub.
+
+## Diagnostics des previews
+
+Le gateway distingue ses refus des réponses de l’application par des codes
+limités et des en-têtes réservés, retirés des réponses amont. Le diagnostic
+Mergeron indique l’expiration du droit personnel ; une requête HEAD au site ne
+prouve jamais un rôle connecté. Les pages d’erreur ne reflètent ni erreur brute,
+ni secret, et le lien de retour provient uniquement de l’URL HTTPS canonique.
+Les cookies des deux couches restent séparés. Le diagnostic de lancement et
+d’arrêt exige les droits habituels sur le projet et l’agent, projette des champs
+explicites et n’exécute aucun programme du projet. Les compteurs Docker et le
+helper de volumes sont distincts des logs applicatifs non fiables ; un code
+137 ne suffit pas à confirmer un OOM. Les limites de ressources sont conservées.

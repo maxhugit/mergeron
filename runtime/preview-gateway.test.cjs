@@ -304,7 +304,10 @@ test('a grant cannot mint a foreign host and service workers cannot persist on s
       expiresAt: Date.now() + 600000,
     }),
   });
-  await assert.rejects(() => gateway.mint(grant), /PREVIEW_IDENTITY_CHANGED/);
+  await assert.rejects(
+    () => gateway.mint(grant),
+    /PREVIEW_CONFIGURATION_CHANGED/,
+  );
   const res = response();
   const req = request('/sw.js', {}, { 'service-worker': 'script' });
   req.method = 'GET';
@@ -317,4 +320,152 @@ test('a grant cannot mint a foreign host and service workers cannot persist on s
     undefined,
   );
   await gateway.close();
+});
+
+test('verification requires the existing personal grant, never forwards tokens or grants public access', async () => {
+  let allowed = true;
+  const receipt = {
+    schemaVersion: 1,
+    generation: '33333333-3333-4333-8333-333333333333',
+    archiveSha: 'a'.repeat(64),
+    sourceFingerprint: 'b'.repeat(64),
+    gitCommit: 'c'.repeat(40),
+    copyId: 'copy',
+    syncedAt: 123,
+  };
+  const gateway = new PreviewGateway({
+    domain,
+    verifySource: async () => true,
+    authorize: async () => {
+      if (!allowed) throw Error('revoked');
+      return {
+        endpoint: 'http://pv-' + runId.replaceAll('-', '') + '-relay:8180',
+        token: 'd'.repeat(64),
+        publicHost: host,
+        expiresAt: Date.now() + 600000,
+        receipt,
+      };
+    },
+  });
+  const get = (url, cookie) =>
+    Object.assign(request(url, {}, { ...(cookie ? { cookie } : {}) }), {
+      method: 'GET',
+    });
+  try {
+    const unauthorized = response();
+    await gateway.handle(get('/.__mergeron_preview/receipt'), unauthorized);
+    assert.equal(unauthorized.statusCode, 401);
+    const unauthorizedAdapter = response();
+    await gateway.handle(
+      get('/.__mergeron_preview/vite-plugin.mjs'),
+      unauthorizedAdapter,
+    );
+    assert.equal(unauthorizedAdapter.statusCode, 401);
+    const link = await gateway.mint(grant);
+    const token = new URLSearchParams(new URL(link.url).hash.slice(1)).get(
+      'mergeron-preview',
+    );
+    const exchange = response();
+    await gateway.handle(
+      request('/.__mergeron_preview/session', { token }),
+      exchange,
+    );
+    const cookie = exchange.headers['set-cookie'].split(';')[0];
+    const observed = response();
+    await gateway.handle(get('/.__mergeron_preview/receipt', cookie), observed);
+    assert.deepEqual(JSON.parse(observed.body), {
+      receipt,
+      synchronized: true,
+      sourceCurrent: true,
+    });
+    assert.equal(observed.body.includes('d'.repeat(64)), false);
+    const adapter = response();
+    await gateway.handle(
+      get('/.__mergeron_preview/vite-plugin.mjs', cookie),
+      adapter,
+    );
+    assert.equal(adapter.statusCode, 200);
+    assert.match(adapter.headers['content-disposition'], /attachment/);
+    assert.match(adapter.body, /export function mergeronPreview/);
+    assert.equal(adapter.body.includes(token), false);
+    const page = response();
+    await gateway.handle(
+      get('/.__mergeron_preview/verify?path=%2F', cookie),
+      page,
+    );
+    assert.equal(page.statusCode, 200);
+    assert.match(page.headers['content-security-policy'], /frame-src 'self'/);
+    assert.equal(page.body.includes(token), false);
+    allowed = false;
+    await assert.rejects(() =>
+      gateway.handle(get('/.__mergeron_preview/receipt', cookie), response()),
+    );
+  } finally {
+    await gateway.close();
+  }
+});
+
+test('access metadata distinguishes authorization expiry and never asserts a site session', async () => {
+  let now = Date.now();
+  const gateway = new PreviewGateway({
+    domain,
+    now: () => now,
+    mergeronUrl:
+      'https://mergeron.example.org/projects/p?secret=hidden#fragment',
+    authorize: async () => ({
+      endpoint: 'http://pv-' + runId.replaceAll('-', '') + '-relay:8180',
+      token: 'a'.repeat(64),
+      publicHost: host,
+      expiresAt: now + 3600000,
+    }),
+  });
+  try {
+    const link = await gateway.mint(grant);
+    const token = new URLSearchParams(new URL(link.url).hash.slice(1)).get(
+      'mergeron-preview',
+    );
+    const exchange = response();
+    await gateway.handle(
+      request('/.__mergeron_preview/session', { token }),
+      exchange,
+    );
+    const cookie = exchange.headers['set-cookie'].split(';')[0];
+    const get = () =>
+      Object.assign(request('/.__mergeron_preview/access', {}, { cookie }), {
+        method: 'GET',
+      });
+    const res = response();
+    await gateway.handle(get(), res);
+    assert.deepEqual(JSON.parse(res.body), {
+      mergeron: { state: 'authorized', expiresAt: now + 1800000 },
+      application: { state: 'unknown' },
+    });
+    assert.equal(res.body.includes(token), false);
+    now += 1800001;
+    await assert.rejects(gateway.handle(get(), response()), {
+      reason: 'session_expired',
+    });
+    const failure = response();
+    gateway.error(failure, 403, 'permission_denied', {
+      headers: { accept: 'text/html' },
+    });
+    assert.equal(failure.headers['x-mergeron-preview-layer'], 'mergeron');
+    assert.match(failure.body, /Connexion propre au site/);
+    assert.match(
+      failure.body,
+      /href="https:\/\/mergeron.example.org\/projects\/p"/,
+    );
+    assert.equal(failure.body.includes('hidden'), false);
+    const app = gateway.responseHeaders(
+      {
+        'x-mergeron-preview-layer': 'mergeron',
+        'x-mergeron-preview-code': 'permission_denied',
+      },
+      runId,
+    );
+    assert.equal(app['x-mergeron-preview-layer'], 'application');
+    assert.equal(app['x-mergeron-preview-code'], undefined);
+  } finally {
+    await gateway.close();
+  }
 });

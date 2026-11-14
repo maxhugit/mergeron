@@ -343,6 +343,19 @@ export class ProjectConnectionToolsService {
         ...(['checks', 'pull_request'].includes(read.operation)
           ? ['number']
           : []),
+        ...(read.operation === 'workflow_runs'
+          ? ['branch', 'ref', 'event', 'status', 'page']
+          : []),
+        ...(['workflow_run', 'workflow_jobs', 'workflow_job_logs'].includes(
+          read.operation,
+        )
+          ? ['runId']
+          : []),
+        ...(['workflow_run', 'workflow_jobs'].includes(read.operation)
+          ? ['attempt']
+          : []),
+        ...(read.operation === 'workflow_jobs' ? ['page'] : []),
+        ...(read.operation === 'workflow_job_logs' ? ['jobId'] : []),
       ];
       if (Object.keys(raw).some((k) => !allowed.includes(k)))
         throw new BadRequestException('Invalid operation fields');
@@ -351,6 +364,17 @@ export class ProjectConnectionToolsService {
       checkConnection();
       let data: unknown;
       switch (read.operation) {
+        case 'workflow_runs':
+        case 'workflow_run':
+        case 'workflow_jobs':
+        case 'workflow_job_logs':
+          data = await this.git.readActions(
+            projectId,
+            connection.id,
+            read,
+            checkConnection,
+          );
+          break;
         case 'branches':
           data = await this.git.remoteBranches(projectId, connection.id);
           break;

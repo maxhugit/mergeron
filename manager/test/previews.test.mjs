@@ -118,8 +118,27 @@ class Docker {
     assert.equal(this.containers.get(id).State.Running, true);
     assert.ok(Buffer.isBuffer(buffer));
     assert.ok(['/workspace', '/control'].includes(destination));
+    if (
+      destination === '/control' &&
+      buffer.subarray(0, 100).toString().startsWith('spec.json')
+    ) {
+      const size = parseInt(buffer.toString('ascii', 124, 136), 8);
+      this.containers.get(id).receipt = JSON.parse(
+        buffer.subarray(512, 512 + size),
+      ).receipt;
+    }
   }
   async containerLogs(id) {
+    const item = this.containers.get(id);
+    if (
+      item?.Config.Labels['io.mergeron.component'].startsWith(
+        'preview-sync-',
+      ) &&
+      !this.omitReceiptAck
+    )
+      return JSON.stringify({
+        receiptGeneration: item.receipt?.generation ?? null,
+      });
     if (
       this.containers.get(id)?.Config.Labels['io.mergeron.component'] ===
       'preview-volume'
@@ -989,4 +1008,144 @@ test('default Manager identity uses the scoped canonical name rather than a stal
   });
   await manager.ready;
   assert.equal(manager.self, 'stack-manager');
+});
+
+test('receipt is committed only after a complete transfer, survives recovery and is never advanced on failure', async () => {
+  const f = await fixture();
+  const receipt = {
+    schemaVersion: 1,
+    generation: randomUUID(),
+    archiveSha: f.input.sourceSha,
+    sourceFingerprint: 'a'.repeat(64),
+    gitCommit: 'b'.repeat(40),
+    copyId: 'copy',
+    syncedAt: null,
+  };
+  const first = await f.manager.start({ ...f.input, receipt });
+  assert.equal(first.receipt.generation, receipt.generation);
+  assert.equal(first.receipt.syncedAt, first.lastSyncedAt);
+  const recovered = new PreviewManager({
+    docker: f.docker,
+    manifest: f.manifest,
+    configuration: f.configuration,
+    env: f.env,
+    self: 'self',
+  });
+  await recovered.ready;
+  assert.equal(
+    (await recovered.status(f.input.runId)).receipt.generation,
+    receipt.generation,
+  );
+  fs.writeFileSync(path.join(f.source, 'index.html'), '<h1>new</h1>');
+  const next = f.exportSource();
+  f.docker.failHelper = true;
+  await assert.rejects(() =>
+    f.manager.sync({
+      runId: f.input.runId,
+      ...next,
+      receipt: {
+        ...receipt,
+        generation: randomUUID(),
+        archiveSha: next.sourceSha,
+      },
+    }),
+  );
+  const failed = await f.manager.status(f.input.runId);
+  assert.equal(failed.receipt.generation, receipt.generation);
+  assert.equal(failed.error, 'PREVIEW_SYNC_FAILED');
+});
+test('a mismatched receipt is refused before resources are created', async () => {
+  const f = await fixture();
+  await assert.rejects(
+    () =>
+      f.manager.start({
+        ...f.input,
+        receipt: {
+          schemaVersion: 1,
+          generation: randomUUID(),
+          archiveSha: 'f'.repeat(64),
+          sourceFingerprint: 'a'.repeat(64),
+          gitCommit: null,
+          copyId: null,
+          syncedAt: null,
+        },
+      }),
+    /PREVIEW_INVALID_RECEIPT/,
+  );
+  assert.equal(f.docker.created.length, 0);
+});
+test('an older helper cannot acknowledge a new receipt merely by exiting successfully', async () => {
+  const f = await fixture();
+  f.docker.omitReceiptAck = true;
+  const receipt = {
+    schemaVersion: 1,
+    generation: randomUUID(),
+    archiveSha: f.input.sourceSha,
+    sourceFingerprint: 'a'.repeat(64),
+    gitCommit: null,
+    copyId: null,
+    syncedAt: null,
+  };
+  await assert.rejects(
+    () => f.manager.start({ ...f.input, receipt }),
+    /PREVIEW_RECEIPT_UNSUPPORTED/,
+  );
+  assert.equal(f.manager.records.get(f.input.runId).receipt, undefined);
+});
+
+test('termination evidence survives cleanup and exit 137 is not invented as OOM', async () => {
+  const f = await fixture();
+  await f.manager.start(f.input);
+  const runtime = f.docker.created.find(
+    (c) => c.Config.Labels['io.mergeron.component'] === 'preview-app',
+  );
+  assert.ok(runtime.Config.Env.includes('NODE_ENV=development'));
+  assert.equal(
+    runtime.Config.Env.filter((s) => s.startsWith('NODE_ENV=')).length,
+    1,
+  );
+  runtime.State = {
+    Running: false,
+    OOMKilled: false,
+    ExitCode: 137,
+    FinishedAt: new Date().toISOString(),
+  };
+  const failed = await f.manager.status(f.input.runId);
+  assert.equal(failed.termination.cause, 'process_exit');
+  assert.equal(failed.termination.exitCode, 137);
+  assert.equal(failed.termination.oomKilled, false);
+  const stopped = await f.manager.stop(f.input.runId);
+  assert.deepEqual(stopped.termination, failed.termination);
+  assert.equal(stopped.cleanupComplete, true);
+});
+test('requested stop and expiry retain distinct causes and explicit recipe mode wins once', async () => {
+  const f = await fixture();
+  f.input.profile.env = { NODE_ENV: 'production' };
+  await f.manager.start(f.input);
+  const runtime = f.docker.created.find(
+    (c) => c.Config.Labels['io.mergeron.component'] === 'preview-app',
+  );
+  assert.deepEqual(
+    runtime.Config.Env.filter((s) => s.startsWith('NODE_ENV=')),
+    ['NODE_ENV=production'],
+  );
+  assert.equal(
+    (await f.manager.status(f.input.runId)).execution.nodeEnv,
+    'production',
+  );
+  f.manager.records.get(f.input.runId).expiresAt = Date.now() - 1;
+  assert.equal(
+    (await f.manager.status(f.input.runId)).termination.cause,
+    'expired',
+  );
+  assert.equal(
+    (await f.manager.stop(f.input.runId)).termination.cause,
+    'expired',
+  );
+  const other = await fixture();
+  await other.manager.start(other.input);
+  assert.equal(
+    (await other.manager.stop(other.input.runId)).termination.cause,
+    'user_stop',
+  );
 });

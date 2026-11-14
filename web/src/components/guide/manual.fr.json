@@ -972,6 +972,14 @@
             ]
           },
           {
+            "title": "Vérifier la génération et le CSS affichés",
+            "paragraphs": [
+              "Génération et vérification navigateur présente le reçu des fichiers transférés : copie Git, commit observé, empreinte incluant les changements non commités et date de synchronisation. Vérifier dans le navigateur ouvre un diagnostic avec votre accès Mergeron à la preview ; la session de connexion du site reste indépendante.",
+              "Le diagnostic compare la source actuelle au reçu et les feuilles CSS chargées aux réponses fraîches du serveur. Il signale les anciennes générations et les contrôles incomplets. La génération compilée reste inconnue si l’application ne fournit pas les marqueurs HTML/CSS attendus. Un HTTP 200 ne confirme pas le rendu. Un sélecteur et une valeur de style calculé peuvent être vérifiés avant puis après rechargement.",
+              "La chaîne du hot reload sépare les fichiers synchronisés, la détection par le serveur, le WebSocket et le style calculé attendu. Avec l’intégration Vite, Surveiller le prochain changement observe pendant 30 secondes sans recharger le document. Une connexion WebSocket réussie ne confirme pas à elle seule le nouveau CSS. Pour Next.js et les serveurs sans intégration, les étapes HMR restent inconnues."
+            ]
+          },
+          {
             "title": "Logs, stockage et données temporaires",
             "paragraphs": [
               "L’onglet liste les conteneurs de cette instance avec leur état et les mesures disponibles. Sélectionnez un conteneur pour lire ses logs ; le terminal des conteneurs applicatifs est réservé aux administrateurs. Stockage détaille les consommations, l’espace et les inodes disponibles quand ils peuvent être mesurés.",
@@ -1012,6 +1020,27 @@
               "Consultez les logs et attendez l’état prêt avec une URL disponible. Ouvrir l’aperçu vérifie vos droits. Une fusion de PR n’est pas nécessaire à ce lancement ; la durée choisie ou un arrêt explicite termine ensuite le test."
             ],
             "warning": "Cocher l’autorisation du projet ne configure ni le Manager, ni le DNS, ni HTTPS. « Manager non configuré » peut désigner uniquement son service d’aperçus désactivé. En cas de prérequis manquant, corrigez le réglage indiqué sans désactiver TLS, le proxy ou la sandbox."
+          },
+          {
+            "title": "Séparer les deux authentifications",
+            "paragraphs": [
+              "Le diagnostic distingue l’autorisation personnelle Mergeron, avec sa date d’expiration, de la session membre ou administrateur du site. Un refus indique la couche concernée : droits Mergeron refusés, configuration modifiée, environnement indisponible ou réponse 401/403 du site.",
+              "Une réponse 200 ne prouve pas une connexion au site : sa session reste inconnue. Rouvrir depuis Mergeron ne renouvelle aucun droit automatiquement et ne déconnecte pas le site."
+            ]
+          },
+          {
+            "title": "Reproduire l’exécution",
+            "paragraphs": [
+              "Les nouvelles previews utilisent NODE_ENV=development par défaut ; une valeur explicite dans la recette est conservée. Installation, compilation et lancement partagent le même shell et ses exports. Un export dans une commande d’agent séparée ne modifie pas la recette.",
+              "Utilisez le verrou de dépendances et un gestionnaire épinglé. Gardez le serveur au premier plan, sur le port déclaré et 0.0.0.0. Le panneau Exécution et causes d’arrêt affiche les paramètres enregistrés ; contrôlez les versions effectives dans le terminal du conteneur."
+            ]
+          },
+          {
+            "title": "Lire les ressources et les arrêts",
+            "paragraphs": [
+              "La RAM totale comprend les pages tmpfs imputées au conteneur. Fichiers et mémoire partagée se recouvrent ; les occupations des volumes ne s’ajoutent pas à ce total. Une mesure absente est inconnue, jamais zéro.",
+              "La cause d’arrêt est conservée : OOM confirmé par Docker, sortie du processus, délai dépassé, expiration ou arrêt demandé. Le code 137 seul ne prouve pas un manque de RAM ; un volume plein est un autre diagnostic. Les relevés après arrêt sont historiques et les volumes temporaires sont supprimés à l’arrêt, à la recréation ou à l’expiration."
+            ]
           }
         ],
         "related": [
@@ -1933,6 +1962,13 @@
               "Les contrôles sont actualisés toutes les 30 secondes. Le suivi est en lecture seule : il ne déclenche ni fusion, ni publication, ni déploiement."
             ],
             "warning": "Un accès Actions manquant ou une information incomplète n’est jamais présenté comme une réussite. Si GitHub ne confirme pas la dépendance, l’interface le précise sans la deviner. Pour un dépôt privé, vérifiez l’autorisation Actions en lecture de la connexion."
+          },
+          {
+            "title": "Diagnostiquer GitHub Actions sans PR ouverte",
+            "paragraphs": [
+              "Demandez à l’agent de lister les exécutions GitHub Actions de la connexion du projet, puis de lire les jobs en échec et leurs logs. Les publications sur main, tags et lancements manuels sont accessibles même sans PR ouverte ni copie locale.",
+              "Les extraits de logs sont bornés et leur troncature est indiquée. Une permission Actions en lecture et un proxy autorisant le stockage GitHub des logs peuvent être nécessaires. Un accès refusé ou un journal indisponible ne signifie pas que les contrôles ont réussi. Cette consultation ne relance et n’annule aucune exécution."
+            ]
           }
         ],
         "related": [

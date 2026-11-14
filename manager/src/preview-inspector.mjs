@@ -55,7 +55,14 @@ export class PreviewInspector {
           const c = await m.owned(o.id, r, o.component);
           let cpuPercent = null,
             memoryBytes = null,
-            memory = null;
+            memory = {
+              usageBytes: null,
+              limitBytes: c.HostConfig?.Memory > 0 ? c.HostConfig.Memory : null,
+              anonymousBytes: null,
+              fileBytes: null,
+              sharedBytes: null,
+              oomKilled: c.State?.OOMKilled === true,
+            };
           if (c.State?.Running) {
             try {
               const s = await m.docker.request(

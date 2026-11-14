@@ -18,6 +18,10 @@ import {
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { GitHubReadScheduler } from './github-read-scheduler';
+import {
+  readGitHubActions,
+  type GitHubActionsQuery,
+} from './github-actions-reader';
 import { requireExecutionAccess } from '../auth/access-context';
 import * as path from 'node:path';
 import { WorkspaceCopiesService } from './workspace-copies.service';
@@ -671,6 +675,31 @@ export class WorkspaceGitService {
       ...options,
       emptyRepository,
     });
+  }
+
+  /** Actions belong to the configured repository, not to an open pull request. */
+  async readActions(
+    projectId: string,
+    resourceId: string,
+    query: GitHubActionsQuery,
+    assertActive: () => void,
+  ) {
+    assertActive();
+    const repo = this.github(projectId, resourceId);
+    if (!repo) throw new BadRequestException('PROJECT_CONNECTION_UNSUPPORTED');
+    return readGitHubActions(
+      `${repo.owner}/${repo.repo}`,
+      query,
+      <T>(endpoint: string) => this.githubGet<T>(repo, endpoint),
+      (jobId: number) => this.githubReads.readJobLog(repo, jobId, assertActive),
+      assertActive,
+      (value: string) => {
+        if (!repo.token) return value;
+        return value
+          .replaceAll(repo.token, '[redacted]')
+          .replaceAll(encodeURIComponent(repo.token), '[redacted]');
+      },
+    );
   }
 
   async pullRequestPreparation(

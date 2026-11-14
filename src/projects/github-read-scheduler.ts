@@ -1,5 +1,6 @@
-import { ConflictException, Logger } from '@nestjs/common';
+import { ConflictException, HttpException, Logger } from '@nestjs/common';
 import { createHash } from 'node:crypto';
+import { readGitHubJobLog } from './github-job-log';
 
 type Repository = { owner: string; repo: string; token?: string };
 type Options = {
@@ -108,6 +109,68 @@ export class GitHubReadScheduler {
       if (next) next();
       else this.active--;
     };
+  }
+
+  /** Shares the read budget, but never caches private log contents or signed URLs. */
+  async readJobLog(
+    repo: Repository,
+    jobId: number,
+    assertActive: () => void = () => {},
+  ) {
+    if (!Number.isSafeInteger(jobId) || jobId < 1)
+      throw new ConflictException('GIT_GITHUB_JOB_MISMATCH');
+    const scope = this.scope(repo);
+    const signal = AbortSignal.timeout(15000);
+    const release = await this.acquire(signal);
+    try {
+      const cooldown = this.cooldowns.get(scope);
+      if (cooldown && cooldown.until > Date.now())
+        throw new ConflictException(cooldown.code);
+      return await readGitHubJobLog(
+        repo,
+        jobId,
+        signal,
+        assertActive,
+        (response) => {
+          if (
+            response.status === 429 ||
+            (response.status === 403 &&
+              (response.headers.get('x-ratelimit-remaining') === '0' ||
+                response.headers.get('retry-after')))
+          ) {
+            const retry = response.headers.get('retry-after');
+            const delay =
+              retry && /^\d+$/.test(retry)
+                ? Number(retry) * 1000
+                : retry
+                  ? Date.parse(retry) - Date.now()
+                  : Number(response.headers.get('x-ratelimit-reset')) * 1000 -
+                    Date.now();
+            throw this.pause(
+              scope,
+              'GIT_GITHUB_RATE_LIMIT',
+              Math.min(
+                3600000,
+                Math.max(60000, Number.isFinite(delay) ? delay : 60000),
+              ),
+            );
+          }
+          if (response.status === 401)
+            throw this.pause(scope, 'GIT_GITHUB_AUTH', 60000);
+          if (response.status === 403)
+            throw new ConflictException('GIT_GITHUB_ACCESS');
+          throw new ConflictException('GIT_GITHUB_LOGS_UNAVAILABLE');
+        },
+      );
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw this.pause(
+        scope,
+        signal.aborted ? 'GIT_GITHUB_TIMEOUT' : 'GIT_GITHUB_NETWORK',
+      );
+    } finally {
+      release();
+    }
   }
 
   private pause(scope: string, code: string, delay?: number) {

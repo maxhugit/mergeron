@@ -2,6 +2,10 @@
 import { Terminal as HeadlessTerminal } from '@xterm/headless';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import * as pty from 'node-pty';
+import {
+  agentChildEnvironment,
+  agentEnvironmentCommand,
+} from '../codex/agent-environment';
 import { basename } from 'node:path';
 import type { TerminalIdentity } from '../database/schema';
 import type { TerminalMetadata } from './terminal.types';
@@ -57,12 +61,13 @@ export class TerminalSession {
     });
     this.headless.loadAddon(this.serializeAddon);
     try {
-      this.process = pty.spawn(identity.shell, [], {
+      const command = agentEnvironmentCommand(identity.shell, []);
+      this.process = pty.spawn(command.binary, command.args, {
         name: 'xterm-256color',
         cols,
         rows,
         cwd: identity.cwd,
-        env: { ...process.env },
+        env: agentChildEnvironment(),
       });
     } catch (error) {
       this.headless.dispose();

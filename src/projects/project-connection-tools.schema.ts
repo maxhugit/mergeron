@@ -26,6 +26,10 @@ export const readProjectGitInput = z.strictObject({
     'pull_requests',
     'pull_request',
     'checks',
+    'workflow_runs',
+    'workflow_run',
+    'workflow_jobs',
+    'workflow_job_logs',
     'local_status',
     'local_diff',
     'local_staged_diff',
@@ -37,6 +41,40 @@ export const readProjectGitInput = z.strictObject({
   path: z.string().max(2048).optional(),
   ref: revision.optional(),
   number: z.number().int().min(1).max(999999999).optional(),
+  runId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  jobId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  attempt: z.number().int().min(1).max(1000).optional(),
+  page: z.number().int().min(1).max(20).optional(),
+  branch: z
+    .string()
+    .trim()
+    .min(1)
+    .max(256)
+    .regex(/^[^\p{Cc}]+$/u)
+    .optional(),
+  event: z
+    .string()
+    .max(64)
+    .regex(/^[a-z_]+$/)
+    .optional(),
+  status: z
+    .enum([
+      'queued',
+      'in_progress',
+      'completed',
+      'waiting',
+      'pending',
+      'requested',
+      'success',
+      'failure',
+      'cancelled',
+      'timed_out',
+      'action_required',
+      'neutral',
+      'skipped',
+      'stale',
+    ])
+    .optional(),
 });
 export const publishProjectGitInput = z.strictObject({
   connectionId: id,

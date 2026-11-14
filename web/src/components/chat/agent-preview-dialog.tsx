@@ -1,3 +1,4 @@
+import { PreviewReceiptSummary } from '../projects/preview-receipt-summary';
 import { useId, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +20,9 @@ import { PreviewLaunchDialog } from '../projects/preview-recipe';
 import { PreviewLifetimeSelect } from '../projects/preview-lifetime-select';
 
 export interface AgentPreview {
+  receipt?:
+    | import('../../../../runtime/preview-receipt.cjs').PreviewReceipt
+    | null;
   source?: import('../../../../runtime/preview-profile.cjs').PreviewSource;
   syncError?: string | null;
   httpStatus?: number | null;
@@ -268,6 +272,13 @@ export function AgentPreviewDialog({
               <p className="break-all text-xs text-muted-foreground">
                 {t('source.label')}: {preview.sourcePath}
               </p>
+              <PreviewReceiptSummary
+                receipt={preview.receipt}
+                projectId={projectId}
+                threadId={threadId}
+                address={address}
+                disabled={!active || !preview.ready || query.isError}
+              />
               {preview.storage && (
                 <PreviewStorageSummary {...preview.storage} />
               )}

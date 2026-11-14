@@ -684,3 +684,58 @@ Docker sur runner GitHub isolé vérifie `/workspace/application`, les création
 et suppressions, le même processus et ses dépendances, le signalement séparé
 d’une modification de dépendances et le transport WebSocket. Il ne doit jamais
 être lancé contre le daemon Unraid de dev ou de production.
+
+## Distinguer l’accès Mergeron et la session du site
+
+Le diagnostic affiche deux observations séparées. **Autorisation Mergeron**
+confirme le droit personnel d’ouvrir cet environnement et sa date d’expiration.
+**Session du site** observe uniquement une requête HEAD sans suivre les
+redirections : un 401 indique que le site demande son authentification, un 403
+qu’il refuse la requête. Un 200, une redirection ou un serveur sans HEAD ne
+prouvent aucun rôle membre ou administrateur ; la session reste inconnue.
+
+Les refus du gateway portent une cause limitée : autorisation absente/invalide
+ou expirée, droits refusés, configuration modifiée, environnement arrêté ou
+serveur du site injoignable. Le gateway retire les en-têtes correspondants des
+réponses applicatives : le site ne peut pas se faire passer pour cette couche.
+Un jeton invalide ou déjà supprimé ne permet pas de connaître la raison exacte.
+Le bouton **Rouvrir depuis Mergeron** revient à l’URL HTTPS canonique configurée,
+sans renouvellement automatique du droit ni déconnexion du site. Les cookies
+Mergeron et les cookies propres au site restent séparés.
+
+## Reproduire le lancement et comprendre un arrêt
+
+Les nouvelles previews fixent un PATH standard incluant le répertoire pnpm et
+`NODE_ENV=development` par défaut. Une valeur explicite dans les variables de la
+recette est conservée, notamment `production` pour tester un build publié.
+L’installation, la compilation et le lancement s’exécutent dans le même shell :
+les exports et changements de dossier passent d’une phase à la suivante. Un
+export exécuté dans une autre commande d’agent ne modifie pas cette recette.
+Les fichiers `.env` privés ne sont pas copiés : déclarer les variables nécessaires
+dans la recette sans les afficher dans les logs. Épingler le gestionnaire dans
+`packageManager` et utiliser le verrou (`pnpm install --frozen-lockfile`, `npm ci`).
+Un serveur reste au premier plan de la commande de lancement, lié à `0.0.0.0`
+et au port déclaré ; utiliser Démarrer/Arrêter/Recréer plutôt qu’un `&` détaché.
+
+**Exécution et causes d’arrêt** montre les paramètres du lancement enregistré,
+pas une nouvelle recette modifiée depuis. Le runtime est l’identifiant du
+catalogue, pas une mesure de la version effective de Node. Contrôler `node -v`
+et le gestionnaire dans le terminal du conteneur concerné. Les anciens
+journaux sans ces métadonnées indiquent « inconnu » jusqu’à recréation.
+
+La mémoire présente la charge totale du cgroup et sa limite, les pages anonymes,
+fichiers et mémoire partagée lorsqu’elles sont disponibles. Les deux dernières
+se recouvrent ; ne pas les additionner. L’occupation et les inodes de chaque
+volume tmpfs sont des mesures distinctes : ne pas les ajouter à la RAM totale.
+La charge d’un tmpfs ne peut pas être attribuée exactement par volume à partir
+de ces compteurs. Une métrique absente ne vaut jamais zéro.
+
+L’arrêt conserve une cause et l’heure de l’observation : OOM confirmé par Docker,
+sortie du processus, délai de démarrage dépassé, expiration ou arrêt demandé.
+Le code 137 seul ne prouve pas un OOM. Un volume ou ses inodes pleins restent
+une cause de stockage distincte ; les logs peuvent préciser une erreur, sans
+servir de preuve de l’état Docker. Les métriques après arrêt sont historiques.
+L’arrêt, la recréation ou l’expiration suppriment les volumes temporaires ; les
+sources originales restent conservées. Aucun plafond n’est relevé automatiquement.
+Le diagnostic HTTP authentifié `GET /api/projects/:projectId/agents/:threadId/preview/diagnostics`
+est en lecture seule et ne lance aucun binaire du projet.

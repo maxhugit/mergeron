@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import archive from '../../runtime/preview-archive.cjs';
+import receipts from '../../runtime/preview-receipt.cjs';
 
 const flags =
   fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW;
@@ -160,7 +161,43 @@ try {
       fs.closeSync(dst.fd);
     }
   }
-  console.log(JSON.stringify({ changed, removed }));
+  if (spec.receipt) {
+    const receipt = receipts.receipt(spec.receipt);
+    // Commit this marker last, after every source write. It is build input,
+    // not evidence that an arbitrary application has rebuilt its HTML/CSS.
+    const name = `/proc/self/fd/${root}/.mergeron-preview-receipt.json`;
+    const temp = `/proc/self/fd/${root}/.mergeron-preview-${randomUUID()}`;
+    try {
+      const fd = fs.openSync(
+        temp,
+        fs.constants.O_WRONLY |
+          fs.constants.O_CREAT |
+          fs.constants.O_EXCL |
+          fs.constants.O_NOFOLLOW,
+        0o600,
+      );
+      try {
+        fs.writeFileSync(fd, JSON.stringify(receipt));
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
+      fs.renameSync(temp, name);
+    } finally {
+      try {
+        fs.unlinkSync(temp);
+      } catch (e) {
+        if (e.code !== 'ENOENT') throw e;
+      }
+    }
+  }
+  console.log(
+    JSON.stringify({
+      changed,
+      removed,
+      receiptGeneration: spec.receipt?.generation ?? null,
+    }),
+  );
 } catch {
   console.error('PREVIEW_SYNC_FAILED');
   process.exitCode = 1;

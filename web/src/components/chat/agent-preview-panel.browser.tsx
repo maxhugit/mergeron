@@ -21,10 +21,35 @@ const api = vi.hoisted(() => ({
   running: true,
   admin: true,
   startupTimeout: false,
+  terminated: false,
   missing: [] as string[],
   prerequisitesFailed: false,
   recipeRequired: false,
   showSources: false,
+}));
+vi.mock('@/generated/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/generated/api')>()),
+  previewsDiagnostics: async () => ({
+    data: {
+      runId: 'synthetic-run',
+      state: 'running',
+      execution: {
+        runtime: 'node',
+        nodeEnv: 'development',
+        directory: '.',
+        updateMode: 'hot',
+      },
+      termination: api.terminated
+        ? {
+            cause: 'process_exit',
+            exitCode: 137,
+            oomKilled: false,
+            observedAt: 1234567890000,
+            finishedAt: null,
+          }
+        : null,
+    },
+  }),
 }));
 vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => ({ isAdministrator: api.admin }),
@@ -114,6 +139,15 @@ vi.mock('@/lib/projects-api', () => ({
             state: api.startupTimeout ? 'failed' : 'running',
             ready: !api.startupTimeout,
             url: api.startupTimeout ? null : 'https://test.preview.example/',
+            receipt: {
+              schemaVersion: 1,
+              generation: '11111111-1111-4111-8111-111111111111',
+              archiveSha: 'a'.repeat(64),
+              sourceFingerprint: 'b'.repeat(64),
+              gitCommit: 'c'.repeat(40),
+              copyId: 'fixture-copy',
+              syncedAt: 123,
+            },
             sourcePath: '/workspace',
             error: api.startupTimeout ? 'PREVIEW_STARTUP_TIMEOUT' : null,
             expiresAt: null,
@@ -158,6 +192,7 @@ beforeEach(async () => {
   api.running = true;
   api.admin = true;
   api.startupTimeout = false;
+  api.terminated = false;
   api.missing = [];
   api.prerequisitesFailed = false;
   api.recipeRequired = false;
@@ -428,3 +463,52 @@ test('source changes are disabled during an active runtime', async () => {
   ).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Appliquer' })).toBeDisabled();
 });
+
+test.each([1180, 390])(
+  'shows the synchronization receipt without overflowing at %ipx',
+  async (width) => {
+    await page.viewport(width, 844);
+    render(
+      <QueryClientProvider client={client}>
+        <AgentPreviewPanel projectId="p" threadId="t" active />
+      </QueryClientProvider>,
+    );
+    await screen.findByText('Génération et vérification navigateur');
+    fireEvent.click(screen.getByText('Génération et vérification navigateur'));
+    expect(await screen.findByText('fixture-copy')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Vérifier dans le navigateur' }),
+    ).toBeEnabled();
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/preview-receipt-${width}.png`,
+    });
+  },
+);
+
+for (const width of [1180, 390])
+  test(`execution and exit diagnostics remain readable at ${width}px`, async () => {
+    api.terminated = true;
+    await page.viewport(width, 800);
+    mount();
+    await screen.findByRole('button', { name: /Application/ });
+    fireEvent.click(screen.getByText('Exécution et causes d’arrêt'));
+    expect(await screen.findByText(/Code de sortie : 137/)).toBeVisible();
+    expect(screen.getByText(/137 seul ne prouve/)).toBeVisible();
+    expect(screen.getByText(/NODE_ENV : development/)).toBeVisible();
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    );
+    const logs = await screen.findByLabelText('Logs');
+    expect(logs.clientHeight).toBeGreaterThan(60);
+    const diagnostics = screen.getByRole('region', {
+      name: 'Exécution et causes d’arrêt',
+    });
+    diagnostics.focus();
+    expect(diagnostics).toHaveFocus();
+    diagnostics.scrollTop = diagnostics.scrollHeight;
+    expect(diagnostics.scrollTop).toBeGreaterThan(0);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/preview-diagnostics-${width}.png`,
+    });
+  });
