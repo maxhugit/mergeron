@@ -26,6 +26,7 @@ export const readProjectGitInput = z.strictObject({
     'pull_requests',
     'pull_request',
     'checks',
+    'commit_delivery',
     'workflow_runs',
     'workflow_run',
     'workflow_jobs',

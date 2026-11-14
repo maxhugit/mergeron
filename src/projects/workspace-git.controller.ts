@@ -1,6 +1,15 @@
-import { ApiBearerAuth, ApiOkResponse } from '@nestjs/swagger';
+import { GitCommitDeliveryDto } from './github-commit-delivery.dto';
+import { ApiBearerAuth, ApiOkResponse, ApiQuery } from '@nestjs/swagger';
 import { GitSnapshotDto } from './workspace-git-snapshot.dto';
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { WorkspaceGitActionsService } from './workspace-git-actions.service';
 import { WorkspaceGitService } from './workspace-git.service';
 import { WorkspaceCopiesService } from './workspace-copies.service';
@@ -151,6 +160,34 @@ export class WorkspaceGitController {
     @Body() body: Record<string, unknown>,
   ) {
     return this.actions.merge(projectId, resourceId, number, body);
+  }
+
+  @Get('connections/:resourceId/commits/:revision/delivery')
+  @ApiBearerAuth()
+  @ApiOkResponse({ type: GitCommitDeliveryDto })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    schema: { type: 'integer', minimum: 1, maximum: 20, default: 1 },
+  })
+  commitDelivery(
+    @Param('projectId') projectId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('revision') revision: string,
+    @Query('page') page: unknown,
+  ) {
+    if (
+      page !== undefined &&
+      (typeof page !== 'string' || !/^(?:[1-9]|1[0-9]|20)$/.test(page))
+    )
+      throw new BadRequestException('Invalid page');
+    return this.git.commitDelivery(
+      projectId,
+      resourceId,
+      revision,
+      page === undefined ? 1 : Number(page),
+      () => {},
+    );
   }
 
   @Get('copies/:copyId')

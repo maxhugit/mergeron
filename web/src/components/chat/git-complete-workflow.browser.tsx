@@ -4,7 +4,10 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { page } from 'vitest/browser';
 import { WorkspaceGitPanel } from './workspace-git-panel';
-vi.mock('@/generated/api', () => ({ filesAddRoot: async () => ({}) }));
+vi.mock('@/generated/api', () => ({
+  workspaceGitCommitDelivery1: vi.fn(),
+  filesAddRoot: async () => ({}),
+}));
 vi.mock('@/lib/file-watch-leases', () => ({
   acquireFileWatch: () => () => {},
 }));

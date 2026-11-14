@@ -53,3 +53,6 @@ export type { PreviewContainerMemoryDto, PreviewContainerDto, PreviewContainersD
 
 export { workspaceGitSnapshot1 } from './sdk.gen';
 export type { GitRemoteObservationDto, GitSnapshotDto, GitSnapshotChangeDto, GitSnapshotBranchDto, WorkspaceGitSnapshot1Data, WorkspaceGitSnapshot1Responses, WorkspaceGitSnapshot1Response } from './types.gen';
+
+export { workspaceGitCommitDelivery1 } from './sdk.gen';
+export type { GitCommitWorkflowDto, GitCommitActionsDto, GitImageEvidenceDto, GitDeploymentEvidenceDto, GitCommitDeliveryDto, WorkspaceGitCommitDelivery1Data, WorkspaceGitCommitDelivery1Responses, WorkspaceGitCommitDelivery1Response } from './types.gen';

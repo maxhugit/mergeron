@@ -339,7 +339,10 @@ export class ProjectConnectionToolsService {
         ].includes(read.operation)
           ? ['path']
           : []),
-        ...(read.operation === 'files' ? ['ref'] : []),
+        ...(['files', 'commit_delivery'].includes(read.operation)
+          ? ['ref']
+          : []),
+        ...(read.operation === 'commit_delivery' ? ['page'] : []),
         ...(['checks', 'pull_request'].includes(read.operation)
           ? ['number']
           : []),
@@ -364,6 +367,19 @@ export class ProjectConnectionToolsService {
       checkConnection();
       let data: unknown;
       switch (read.operation) {
+        case 'commit_delivery':
+          if (!read.ref)
+            throw new BadRequestException(
+              'An immutable commit SHA is required',
+            );
+          data = await this.git.commitDelivery(
+            projectId,
+            connection.id,
+            read.ref,
+            read.page ?? 1,
+            checkConnection,
+          );
+          break;
         case 'workflow_runs':
         case 'workflow_run':
         case 'workflow_jobs':

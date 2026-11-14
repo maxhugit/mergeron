@@ -791,6 +791,67 @@ export class WorkspaceGitService {
     );
   }
 
+  /** Commit-bound CI evidence. Image publication and deployment need independent receipts. */
+  async commitDelivery(
+    projectId: string,
+    resourceId: string,
+    revision: string,
+    page: number,
+    assertActive: () => void,
+  ) {
+    if (
+      !/^[a-f0-9]{40,64}$/.test(revision) ||
+      !Number.isSafeInteger(page) ||
+      page < 1 ||
+      page > 20
+    )
+      throw new BadRequestException('GIT_INVALID_INPUT');
+    assertActive();
+    const repo = this.github(projectId, resourceId);
+    if (!repo?.token) throw new ConflictException('GIT_GITHUB_TOKEN_REQUIRED');
+    const check = () => {
+      assertActive();
+      const current = this.github(projectId, resourceId);
+      if (
+        !current ||
+        current.owner !== repo.owner ||
+        current.repo !== repo.repo ||
+        current.token !== repo.token
+      )
+        throw new ConflictException('GIT_STALE');
+    };
+    check();
+    const commit = await this.githubGet<{ sha: string }>(
+      repo,
+      `commits/${revision}`,
+    );
+    check();
+    if (commit.sha !== revision)
+      throw new ConflictException('GIT_GITHUB_INVALID_RESPONSE');
+    const actions = await this.readActions(
+      projectId,
+      resourceId,
+      { operation: 'workflow_runs', ref: revision, page },
+      check,
+    );
+    check();
+    return {
+      revision,
+      repository: `${repo.owner}/${repo.repo}`,
+      commitUrl: `https://github.com/${repo.owner}/${repo.repo}/commit/${revision}`,
+      inspectedAt: Date.now(),
+      actions,
+      image: {
+        state: 'unverified' as const,
+        reason: 'registry_receipt_required' as const,
+      },
+      deployment: {
+        state: 'unverified' as const,
+        reason: 'runtime_receipt_required' as const,
+      },
+    };
+  }
+
   async pullRequestPreparation(
     projectId: string,
     resourceId: string,

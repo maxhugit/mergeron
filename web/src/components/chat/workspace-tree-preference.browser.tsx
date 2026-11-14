@@ -46,7 +46,10 @@ vi.mock('@/lib/platform-session', () => ({
     return Promise.resolve({ ...body, projectId });
   },
 }));
-vi.mock('@/generated/api', () => ({ filesAddRoot: () => Promise.resolve({}) }));
+vi.mock('@/generated/api', () => ({
+  workspaceGitCommitDelivery1: vi.fn(),
+  filesAddRoot: () => Promise.resolve({}),
+}));
 vi.mock('@/hooks/use-deliverable-directory-aliases', () => ({
   useDeliverableDirectoryAliases: () => ({}),
 }));

@@ -4645,3 +4645,72 @@ export type WorkspaceGitSnapshot1Responses = {
 };
 
 export type WorkspaceGitSnapshot1Response = WorkspaceGitSnapshot1Responses[keyof WorkspaceGitSnapshot1Responses];
+
+export type GitCommitWorkflowDto = {
+    id: number;
+    name: string | null;
+    title: string | null;
+    event: string | null;
+    branch: string | null;
+    revision: string;
+    attempt: number | null;
+    status: string | null;
+    conclusion: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+    url: string;
+};
+
+
+export type GitCommitActionsDto = {
+    total: number;
+    limited: boolean;
+    nextPage: number | null;
+    inspectedAt: number;
+    items: Array<GitCommitWorkflowDto>;
+};
+
+
+export type GitImageEvidenceDto = {
+    state: 'unverified';
+    reason: 'registry_receipt_required';
+};
+
+
+export type GitDeploymentEvidenceDto = {
+    state: 'unverified';
+    reason: 'runtime_receipt_required';
+};
+
+
+export type GitCommitDeliveryDto = {
+    revision: string;
+    repository: string;
+    commitUrl: string;
+    inspectedAt: number;
+    actions: GitCommitActionsDto;
+    image: GitImageEvidenceDto;
+    deployment: GitDeploymentEvidenceDto;
+};
+
+
+export type WorkspaceGitCommitDelivery1Data = {
+    body?: never;
+    path: {
+        projectId: string;
+        resourceId: string;
+        revision: string;
+    };
+    query?: {
+        page?: number;
+    };
+    url: '/api/projects/{projectId}/git/connections/{resourceId}/commits/{revision}/delivery';
+};
+
+
+export type WorkspaceGitCommitDelivery1Responses = {
+    200: GitCommitDeliveryDto;
+};
+
+
+export type WorkspaceGitCommitDelivery1Response = WorkspaceGitCommitDelivery1Responses[keyof WorkspaceGitCommitDelivery1Responses];
