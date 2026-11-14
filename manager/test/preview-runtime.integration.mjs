@@ -10,7 +10,7 @@ import { DockerClient } from '../src/docker-client.mjs';
 import { PreviewManager } from '../src/previews.mjs';
 import gatewayModule from '../../runtime/preview-gateway.cjs';
 
-const { PreviewGateway } = gatewayModule;
+const { PreviewGateway, PreviewAccessError } = gatewayModule;
 const stack = process.env.MERGERON_PREVIEW_TEST_STACK,
   hostRoot = process.env.MERGERON_PREVIEW_TEST_ROOT,
   image = process.env.MERGERON_PREVIEW_TEST_SDK;
@@ -407,7 +407,9 @@ try {
     domain: 'preview.example.test',
     authorize: async (g) => {
       assert.equal(g.projectId, 'node-project');
-      if (!authorized) throw Error('revoked');
+      if (!authorized) throw new PreviewAccessError('permission_denied');
+      if (manager.records.get(g.runId)?.state !== 'running')
+        throw new PreviewAccessError('configuration_changed');
       return manager.transport(g.runId);
     },
   });
@@ -623,10 +625,10 @@ try {
     (await manager.status(rebuiltInput.runId)).url,
     verifiedReady.url,
   );
-  assert.equal(
-    (await request('http://127.0.0.1:8173/', { headers })).status,
-    403,
-  );
+  const changedAccess = await request('http://127.0.0.1:8173/', { headers });
+  assert.equal(changedAccess.status, 409);
+  assert.equal(changedAccess.headers['x-mergeron-preview-layer'], 'mergeron');
+  assert.equal(JSON.parse(changedAccess.text).code, 'configuration_changed');
   const reopened = await gateway.mint({ ...grant, runId: rebuiltInput.runId });
   assert.equal(new URL(reopened.url).origin, new URL(minted.url).origin);
   const reopenedToken = new URLSearchParams(
