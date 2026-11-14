@@ -301,6 +301,27 @@ describe('native internal MCP over HTTP', () => {
           }),
         remoteBranches: () =>
           Promise.resolve({ items: [{ name: 'main', revision: gitHead }] }),
+        readActions: (
+          _p: string,
+          _c: string,
+          _q: unknown,
+          active: () => void,
+        ) => {
+          active();
+          return Promise.resolve({
+            items: [
+              {
+                id: 43398956550,
+                event: 'push',
+                branch: 'main',
+                conclusion: 'failure',
+              },
+            ],
+            total: 1,
+            nextPage: null,
+            limited: false,
+          });
+        },
       } as unknown as WorkspaceGitService,
       {
         push: pushConnection,
@@ -1377,6 +1398,42 @@ describe('native internal MCP over HTTP', () => {
         })
       ).isError,
     ).toBe(true);
+  });
+
+  it('exposes Actions reads through the real native MCP schema on a read-only active turn without a local copy', async () => {
+    const { client } = await connect();
+    activate('admin', false);
+    ownCopies = [];
+    const args = {
+      connectionId: gitConnectionId,
+      operation: 'workflow_runs',
+      branch: 'main',
+      event: 'push',
+      status: 'failure',
+    };
+    const result = await client.callTool({
+      name: 'project_git_read',
+      arguments: args,
+    });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      untrustedContent: true,
+      data: { items: [{ event: 'push', conclusion: 'failure' }] },
+    });
+    expect(
+      (
+        await client.callTool({
+          name: 'project_git_read',
+          arguments: { ...args, address: 'https://attacker.invalid' },
+        })
+      ).isError,
+    ).toBe(true);
+    service.revoke('agent');
+    expect(
+      JSON.stringify(
+        await client.callTool({ name: 'project_git_read', arguments: args }),
+      ),
+    ).toContain('NO_ACTIVE_TURN');
   });
 
   it('renews an expired same-turn lease on authenticated input after multiple calls and compaction, then starts a fresh turn', async () => {
