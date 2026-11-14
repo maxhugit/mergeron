@@ -57,7 +57,12 @@ export async function readGitHubJobLog(
       redirect: 'error',
       signal,
     });
-    assertActive();
+    try {
+      assertActive();
+    } catch (error) {
+      await response.body?.cancel();
+      throw error;
+    }
     return response;
   };
   const info = await request('HEAD');

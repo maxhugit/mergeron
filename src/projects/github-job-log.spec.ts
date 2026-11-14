@@ -186,3 +186,26 @@ it('keeps the proxy public-only and permits only the dedicated Actions log stora
     config.indexOf('http_access allow github_actions_logs'),
   );
 });
+
+it('cancels the response body if authority is revoked while opening the log download', async () => {
+  let active = true;
+  const cancel = vi.fn();
+  const response = new Response(new ReadableStream({ cancel }));
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(redirect())
+    .mockResolvedValueOnce(
+      new Response(null, { headers: { 'content-length': '10' } }),
+    )
+    .mockImplementationOnce(() => {
+      active = false;
+      return Promise.resolve(response);
+    });
+  vi.stubGlobal('fetch', fetch);
+  await expect(
+    new GitHubReadScheduler().readJobLog(repo, jobId, () => {
+      if (!active) throw new Error('revoked');
+    }),
+  ).rejects.toThrow();
+  expect(cancel).toHaveBeenCalledTimes(1);
+});
