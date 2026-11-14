@@ -5,6 +5,21 @@ Vous installez le Manager ; il prépare les données, les secrets internes, les
 réseaux et les trois conteneurs Mergeron. Ne créez pas ces dépendances à la main
 et ne lancez pas `deployment/compose.yml` pour installer une deuxième pile.
 
+## Journaux GitHub Actions des agents
+
+La consultation des exécutions et jobs utilise `api.github.com`. Pour lire aussi
+les extraits de logs, le modèle Squid inclut uniquement les hôtes
+`productionresultssa<N>.blob.core.windows.net` utilisés par les liens signés
+GitHub. Il ne permet pas tout Azure Blob et les refus des réseaux privés restent
+prioritaires. Une configuration Squid persistante existante n’est pas écrasée :
+l’opérateur y reporte les deux lignes du modèle `deployment/config/squid.conf`
+(`acl github_actions_logs ...` et `http_access allow github_actions_logs`), après
+les refus privés et avant le refus final, puis valide et recharge le proxy par
+sa procédure d’exploitation. Sans cet accès, les métadonnées restent consultables
+et l’erreur de téléchargement est signalée ; elle ne prouve pas une absence de
+jobs. Aucun changement de proxy en production n’est déclenché par une mise à
+jour du code seule. Voir le [contrat MCP et les droits GitHub](contexte-et-outils-agents.md).
+
 ## 1. Préparer l’hôte
 
 Il faut un hôte **Docker Linux amd64**, un dossier persistant, une sauvegarde

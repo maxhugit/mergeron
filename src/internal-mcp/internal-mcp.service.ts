@@ -466,6 +466,18 @@ export class InternalMcpService implements OnModuleDestroy {
                 'PROJECT_CONNECTION_UNAVAILABLE',
                 'PROJECT_CONNECTION_UNSUPPORTED',
                 'PROJECT_CONNECTION_REQUEST_CONFLICT',
+                'GIT_GITHUB_ACCESS',
+                'GIT_GITHUB_AUTH',
+                'GIT_GITHUB_RATE_LIMIT',
+                'GIT_GITHUB_BUSY',
+                'GIT_GITHUB_TIMEOUT',
+                'GIT_GITHUB_NETWORK',
+                'GIT_GITHUB_UNAVAILABLE',
+                'GIT_GITHUB_INVALID_RESPONSE',
+                'GIT_GITHUB_JOB_MISMATCH',
+                'GIT_GITHUB_LOGS_UNAVAILABLE',
+                'GIT_GITHUB_LOGS_TOO_LARGE',
+                'GIT_GITHUB_LOGS_HOST_UNSUPPORTED',
                 'GIT_OUTPUT_LIMIT_EXCEEDED',
                 'GIT_COMMAND_TIMEOUT',
                 'GIT_STALE',
@@ -519,7 +531,12 @@ export class InternalMcpService implements OnModuleDestroy {
                     message:
                       (code === 'NO_ACTIVE_TURN'
                         ? 'The authenticated turn context is expired or unavailable. Fresh user input or a human approval can renew the same active turn; a stopped or completed turn requires a new turn. Do not retry automatically. '
-                        : 'Check project access, configured connection, manager, arguments and observed state. ') +
+                        : code === 'GIT_GITHUB_ACCESS' ||
+                            code === 'GIT_GITHUB_AUTH'
+                          ? 'GitHub refused this repository read. Check the configured connection and repository Actions read permission; this does not mean no workflows exist. '
+                          : code.startsWith('GIT_GITHUB_LOGS_')
+                            ? 'Job logs are unavailable, expired, incomplete or blocked by the approved storage/proxy scope. Do not infer success or bypass network restrictions. Use the observed job link and report this limit. '
+                            : 'Check project access, configured connection, manager, arguments and observed state. ') +
                       'For any mutation retry keep the SAME requestId and payload. An unknown outcome may already have succeeded: inspect local and remote state and never automatically retry with a new ID. Never claim unconfirmed success.',
                   }),
                 },
