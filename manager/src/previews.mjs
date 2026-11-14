@@ -118,6 +118,7 @@ export class PreviewManager {
       synchronization: 'filtered-copy',
       data: 'ephemeral',
       storage: previewStorage,
+      diskCache: { available: false, reason: 'quota_unavailable' },
     };
   }
   /** Read-only deployment checks; do not create Docker objects or copy sources. */
@@ -381,10 +382,11 @@ export class PreviewManager {
   }
   async volume(r, suffix) {
     const name = this.prefix(r) + '-' + suffix;
+    const limits = r.storageLimits ?? previewStorage;
     const options = {
       type: 'tmpfs',
       device: 'tmpfs',
-      o: `size=${suffix === 'source' ? previewStorage.workspaceMb : suffix === 'cache' ? previewStorage.cacheMb : suffix === 'temporary' ? previewStorage.temporaryMb : suffix === 'data' ? previewStorage.dataMb : suffix.startsWith('control-') ? 16 : 64}m,nr_inodes=${previewStorage.inodesPerVolume},nosuid,nodev,uid=11002,gid=11002,mode=${suffix === 'temporary' ? '1777' : '0700'}`,
+      o: `size=${suffix === 'source' ? limits.workspaceMb : suffix === 'cache' ? limits.cacheMb : suffix === 'temporary' ? limits.temporaryMb : suffix === 'data' ? limits.dataMb : suffix.startsWith('control-') ? 16 : 64}m,nr_inodes=${limits.inodesPerVolume},nosuid,nodev,uid=11002,gid=11002,mode=${suffix === 'temporary' ? '1777' : '0700'}`,
     };
     const v = await this.docker.request('/volumes/create', {
       method: 'POST',
@@ -631,6 +633,7 @@ export class PreviewManager {
           ? null
           : Date.now() + profile.lifetimeMinutes * 60000,
       lifetimeMinutes: profile.lifetimeMinutes,
+      storageLimits: storage.storageLimits(profile),
       objects: [],
       volumes: [],
       networks: [],
@@ -737,7 +740,7 @@ export class PreviewManager {
       r.dataVolume = await this.volume(r, 'data');
       r.cacheVolume = await this.volume(r, 'cache');
       r.temporaryVolume = await this.volume(r, 'temporary');
-      r.storageLimits = previewStorage;
+      r.storageLimits = storage.storageLimits(profile);
       this.save(r);
       // Keep the bounded tmpfs source volume mounted between atomic sync jobs.
       // No host directory, root initializer or unbounded local data volume.

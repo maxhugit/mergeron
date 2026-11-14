@@ -1184,3 +1184,38 @@ test('mode and port conflicts are rejected before any Docker resource is created
   await assert.rejects(f.manager.start(f.input), /PREVIEW_EXECUTION_CONFLICT/);
   assert.equal(f.docker.created.length, 0);
 });
+
+test('approved storage budgets are enforced on actual volumes and reflected in status', async () => {
+  const f = await fixture();
+  f.input.profile.storageBudget = {
+    workspaceMb: 1024,
+    cacheMb: 128,
+    temporaryMb: 64,
+    dataMb: 64,
+  };
+  await f.manager.start(f.input);
+  const cache = [...f.docker.volumes.values()].find((v) =>
+    v.Name.endsWith('-cache'),
+  );
+  assert.equal(cache.Options.type, 'tmpfs');
+  assert.match(cache.Options.o, /size=128m,/);
+  const result = await f.manager.status(f.input.runId);
+  assert.equal(result.storage.limits.cacheMb, 128);
+  assert.equal(result.storage.limits.workspaceMb, 1024);
+  assert.equal(result.storage.limits.memoryCharged, true);
+  assert.equal(f.manager.capabilities().diskCache.available, false);
+});
+test('invalid storage ceilings fail before creating runtime resources', async () => {
+  const f = await fixture();
+  f.input.profile.storageBudget = {
+    workspaceMb: 4096,
+    cacheMb: 4096,
+    temporaryMb: 64,
+    dataMb: 64,
+  };
+  await assert.rejects(
+    f.manager.start(f.input),
+    /PREVIEW_INVALID_STORAGE_BUDGET/,
+  );
+  assert.equal(f.docker.created.length, 0);
+});

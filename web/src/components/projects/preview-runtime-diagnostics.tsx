@@ -1,6 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { previewsDiagnostics } from '@/generated/api';
+import { usePreviewRuntimeDiagnostics } from '@/lib/use-preview-runtime-diagnostics';
 
 export function PreviewRuntimeDiagnostics({
   projectId,
@@ -19,21 +18,7 @@ export function PreviewRuntimeDiagnostics({
     user_stop: t('runtimeDiagnostics.causes.userStop'),
     expired: t('runtimeDiagnostics.causes.expired'),
   };
-  const query = useQuery({
-    queryKey: ['agent-preview', projectId, threadId, 'diagnostics', runId],
-    queryFn: async ({ signal }) =>
-      (
-        await previewsDiagnostics({
-          path: { projectId, threadId },
-          signal,
-          throwOnError: true,
-          meta: { silent: true },
-        })
-      ).data,
-    refetchInterval: (query) =>
-      query.state.data?.state === 'running' ? 5000 : false,
-    retry: false,
-  });
+  const query = usePreviewRuntimeDiagnostics(projectId, threadId, runId);
   // Keep a previous run's cached result out of the current environment.
   const data = query.data?.runId === runId ? query.data : null;
   return (

@@ -189,3 +189,11 @@ possédé, de la même image applicative et sous UID 11002, avec commande fixe e
 globaux ne sont jamais exécutés ; aucun secret, environnement complet ou
 programme du projet n’est renvoyé. Consulter les diagnostics ne provoque pas
 une nouvelle exécution Docker.
+
+Les budgets de volumes de preview appartiennent à la politique humaine et sont
+validés aux deux frontières application/Manager. Les recettes d’agents ne peuvent
+pas les fournir. Les valeurs restent dans les plafonds tmpfs existants ; driver,
+options et identité du volume sont revérifiés. Les profils suggérés ne changent
+aucune politique avant enregistrement et ne relèvent rien automatiquement.
+L’absence d’un backend à quota disque vérifiable reste une capacité indisponible,
+sans bascule vers un stockage disque illimité ou accès supplémentaire à l’hôte.

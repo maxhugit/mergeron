@@ -1,3 +1,5 @@
+import type { PreviewContainerDto } from '@/generated/api';
+import { PreviewResourceOverview } from '../projects/preview-resource-overview';
 import { PreviewRuntimeDiagnostics } from '../projects/preview-runtime-diagnostics';
 import { PreviewReceiptSummary } from '../projects/preview-receipt-summary';
 import { lazy, Suspense, useState } from 'react';
@@ -15,7 +17,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { projectsApi } from '@/lib/projects-api';
 import { usePlatformSession } from '@/lib/platform-session';
-import { PreviewStorageMeters } from '../projects/preview-storage-meters';
 import { PreviewLaunchDialog } from '../projects/preview-recipe';
 import { PreviewPrerequisites } from '../projects/preview-prerequisites';
 import type { AgentPreview } from './agent-preview-dialog';
@@ -29,24 +30,13 @@ const ContainerTerminal = lazy(() =>
     default: m.PreviewContainerTerminal,
   })),
 );
-export interface PreviewContainer {
-  component: string;
-  name: string;
-  image: string;
-  state: string;
-  startedAt: string | null;
-  cpuPercent: number | null;
-  memoryBytes: number | null;
-  memory?: {
-    usageBytes: number | null;
-    limitBytes: number | null;
-    anonymousBytes: number | null;
-    fileBytes: number | null;
-    sharedBytes: number | null;
-    oomKilled: boolean;
-  } | null;
-  terminalAvailable: boolean;
-}
+export type PreviewContainer = Omit<
+  PreviewContainerDto,
+  'memory' | 'metricsCheckedAt'
+> & {
+  memory?: PreviewContainerDto['memory'];
+  metricsCheckedAt?: number | null;
+};
 export function AgentPreviewPanel({
   projectId,
   threadId,
@@ -487,8 +477,19 @@ export function AgentPreviewPanel({
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3">
-          {storageVisible && preview?.storage && (
-            <PreviewStorageMeters storage={preview.storage} />
+          {active && storageVisible && preview?.storage && runId && (
+            <PreviewResourceOverview
+              projectId={projectId}
+              threadId={threadId}
+              runId={runId}
+              state={preview.state}
+              storage={preview.storage}
+              application={
+                containers.isError
+                  ? undefined
+                  : items.find((c) => c.component === 'preview-app')
+              }
+            />
           )}
           {preview?.requiresRestart && (
             <p role="status" className="shrink-0 text-xs">
@@ -505,7 +506,12 @@ export function AgentPreviewPanel({
               </p>
             ) : (
               <div
-                className="max-h-[216px] overflow-y-auto overscroll-contain [scrollbar-gutter:stable]"
+                className={
+                  (storageVisible && preview?.storage
+                    ? 'max-h-[152px]'
+                    : 'max-h-[216px]') +
+                  ' overflow-y-auto overscroll-contain [scrollbar-gutter:stable]'
+                }
                 aria-label={t('containerList')}
               >
                 <div className="sticky top-0 z-10 grid h-6 grid-cols-[minmax(0,1fr)_80px] items-center gap-3 bg-background px-2 text-xs text-muted-foreground @xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_64px_80px]">

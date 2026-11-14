@@ -19,6 +19,7 @@ export interface PreviewProfile {
   port: number;
   path: string;
   env: Record<string, string>;
+  storageBudget?: import('./preview-storage.cjs').PreviewStorageBudget;
   memoryMb: number;
   cpus: number;
   lifetimeMinutes: number | null;

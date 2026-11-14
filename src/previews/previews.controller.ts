@@ -1,3 +1,4 @@
+import { PreviewContainersDto } from './preview-containers.dto';
 import { PreviewLaunchConfigurationDto } from './preview-launch.dto';
 import { PreviewDiagnosticsDto } from './preview-diagnostics.dto';
 import { Controller, Get, Put, Post, Param, Body, Query } from '@nestjs/common';
@@ -105,10 +106,10 @@ export class PreviewsController {
       input.expectedRevision,
     );
   }
-  @Get('agents/:threadId/preview/containers') containers(
-    @Param('projectId') p: string,
-    @Param('threadId') t: string,
-  ) {
+  @Get('agents/:threadId/preview/containers')
+  @ApiBearerAuth()
+  @ApiOkResponse({ type: PreviewContainersDto })
+  containers(@Param('projectId') p: string, @Param('threadId') t: string) {
     return this.previews.inspectRuntime(p, t, 'containers');
   }
   @Get('agents/:threadId/preview/container-logs') containerLogs(

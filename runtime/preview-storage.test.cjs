@@ -58,3 +58,27 @@ test('cache paths never use sources, data or the bounded temporary volume', () =
     else assert.match(value, /^\/cache\//);
   }
 });
+
+test('human storage budgets can reduce fixed ceilings but cannot add unbounded or unknown backends', () => {
+  const budget = {
+    workspaceMb: 1024,
+    cacheMb: 128,
+    temporaryMb: 64,
+    dataMb: 64,
+  };
+  assert.deepEqual(storage.storageBudget(budget), budget);
+  assert.equal(storage.storageLimits({ storageBudget: budget }).cacheMb, 128);
+  assert.deepEqual(storage.storageLimits({}), storage.previewStorage);
+  for (const value of [
+    null,
+    {},
+    { ...budget, cacheMb: 2049 },
+    { ...budget, cacheMb: 0 },
+    { ...budget, backend: 'disk' },
+    { ...budget, workspaceMb: Infinity },
+  ])
+    assert.throws(
+      () => storage.storageBudget(value),
+      /PREVIEW_INVALID_STORAGE_BUDGET/,
+    );
+});

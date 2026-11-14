@@ -13,7 +13,24 @@ export class PreviewExecutionCheckDto {
   issues!: PreviewExecutionIssueDto[];
 }
 export class PreviewLaunchConfigurationDto {
-  @ApiProperty({ type: Object, nullable: true, additionalProperties: true })
+  @ApiProperty({
+    type: 'object',
+    nullable: true,
+    additionalProperties: true,
+    properties: {
+      storageBudget: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['workspaceMb', 'cacheMb', 'temporaryMb', 'dataMb'],
+        properties: {
+          workspaceMb: { type: 'integer', minimum: 64, maximum: 4096 },
+          cacheMb: { type: 'integer', minimum: 16, maximum: 2048 },
+          temporaryMb: { type: 'integer', minimum: 16, maximum: 512 },
+          dataMb: { type: 'integer', minimum: 16, maximum: 256 },
+        },
+      },
+    },
+  })
   profile!: Record<string, unknown> | null;
   @ApiProperty({ type: PreviewExecutionCheckDto, nullable: true })
   executionCheck!: PreviewExecutionCheckDto | null;

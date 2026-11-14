@@ -208,3 +208,8 @@ utilise un helper jetable sans réseau, sources ou secrets, retiré avant le
 lancement applicatif. Il ne demande aucun port, montage d’hôte ou privilège
 supplémentaire ; une image sans binaire compatible garde ses versions inconnues.
 Voir le [contrat de lancement](previsualisations-agents.md#contrôle-de-lenvironnement-de-lancement).
+
+Les budgets tmpfs par projet se configurent dans les paramètres de ressources,
+sans montage d’hôte ni variable d’installation supplémentaire. Le Manager conserve
+les plafonds techniques globaux et annonce le cache disque indisponible tant
+qu’il ne peut pas imposer un quota. Voir les [profils de ressources](previsualisations-agents.md#profils-de-ressources-et-budgets-par-projet).

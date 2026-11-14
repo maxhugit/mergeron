@@ -157,3 +157,8 @@ catalogue `MERGERON_PREVIEW_IMAGES` déjà autorisé. Aucune nouvelle variable o
 permission Docker n’est requise. La sonde est isolée du réseau et des données,
 avec limite technique de 128 Mio, puis supprimée avant le runtime applicatif ;
 les plafonds approuvés pour celui-ci restent inchangés.
+
+`storageBudget` est un champ facultatif de la politique de projet, pas une
+variable du Manager. Il ne peut pas augmenter les plafonds tmpfs globaux. Les
+recettes d’agents héritent de cette politique sans pouvoir changer ses budgets.
+Aucun volume disque non borné n’est activé par une variable de secours.

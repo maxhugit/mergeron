@@ -1,3 +1,9 @@
+export interface PreviewStorageBudget {
+  workspaceMb: number;
+  cacheMb: number;
+  temporaryMb: number;
+  dataMb: number;
+}
 export interface PreviewStorageLimits {
   backend: 'tmpfs';
   memoryCharged: true;
@@ -25,6 +31,10 @@ export interface PreviewStorageStatus {
 }
 declare const storage: {
   previewStorage: PreviewStorageLimits;
+  storageBudget(value: unknown): PreviewStorageBudget | undefined;
+  storageLimits(profile: {
+    storageBudget?: PreviewStorageBudget;
+  }): PreviewStorageLimits;
   safeStorageLimits(value: unknown): PreviewStorageLimits | null;
   safeStorageStatus(value: unknown): PreviewStorageStatus | null;
 };

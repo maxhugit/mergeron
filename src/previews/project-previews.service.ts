@@ -1102,6 +1102,9 @@ export class ProjectPreviewsService implements OnModuleInit, OnModuleDestroy {
         ? contract.profile({
             ...recipe,
             enabled: approved.enabled,
+            ...(approved.storageBudget
+              ? { storageBudget: approved.storageBudget }
+              : {}),
             memoryMb: approved.memoryMb,
             cpus: approved.cpus,
             lifetimeMinutes: approved.lifetimeMinutes,

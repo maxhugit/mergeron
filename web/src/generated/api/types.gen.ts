@@ -4497,6 +4497,12 @@ export type PreviewExecutionCheckDto = {
 
 export type PreviewLaunchConfigurationDto = {
     profile: {
+        storageBudget?: {
+            workspaceMb: number;
+            cacheMb: number;
+            temporaryMb: number;
+            dataMb: number;
+        };
         [key: string]: unknown;
     } | null;
     executionCheck: PreviewExecutionCheckDto | null;
@@ -4542,3 +4548,47 @@ export type PreviewsSaveRecipeResponses = {
 };
 
 export type PreviewsSaveRecipeResponse = PreviewsSaveRecipeResponses[keyof PreviewsSaveRecipeResponses];
+
+
+export type PreviewContainerMemoryDto = {
+    usageBytes: number | null;
+    limitBytes: number | null;
+    anonymousBytes: number | null;
+    fileBytes: number | null;
+    sharedBytes: number | null;
+    oomKilled: boolean;
+};
+
+export type PreviewContainerDto = {
+    component: string;
+    name: string;
+    image: string;
+    state: string;
+    startedAt: string | null;
+    cpuPercent: number | null;
+    memoryBytes: number | null;
+    metricsCheckedAt: number | null;
+    memory: PreviewContainerMemoryDto | null;
+    terminalAvailable: boolean;
+};
+
+export type PreviewContainersDto = {
+    runId: string;
+    containers: Array<PreviewContainerDto>;
+};
+
+export type PreviewsContainersData = {
+    body?: never;
+    path: {
+        projectId: string;
+        threadId: string;
+    };
+    query?: never;
+    url: '/api/projects/{projectId}/agents/{threadId}/preview/containers';
+};
+
+export type PreviewsContainersResponses = {
+    200: PreviewContainersDto;
+};
+
+export type PreviewsContainersResponse = PreviewsContainersResponses[keyof PreviewsContainersResponses];

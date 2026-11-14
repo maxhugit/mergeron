@@ -209,5 +209,20 @@
     "versions": "Image au démarrage : Node {{node}} · npm {{npm}} · pnpm {{pnpm}} · Corepack {{corepack}} · Mesuré le {{date}}",
     "versionsUnknown": "Versions non mesurées pour cet environnement. Le contrôle est effectué à la création ; une valeur absente reste inconnue.",
     "blocked": "La recette présente un conflit de mode ou de port. Corrigez-la avant le lancement."
+  },
+  "resourceProfiles": {
+    "title": "Profils de ressources de développement",
+    "help": "Prépare des valeurs recommandées dans ce formulaire. Enregistrez pour les approuver ; elles ne s’appliquent qu’à une nouvelle création. Aucun agent ne peut relever ces plafonds. Un framework complexe peut nécessiter une autre configuration.",
+    "static": "Statique / léger",
+    "vite": "Vite / SPA",
+    "next": "Next.js / compilation",
+    "budget": "Budgets des volumes temporaires",
+    "diskUnavailable": "Cache disque indisponible : ce Manager ne peut pas garantir de quota disque. Les caches restent sur tmpfs avec les limites choisies.",
+    "overview": "Mémoire, stockage et arrêt",
+    "memory": "Application : {{usage}} / {{limit}} Mio au total · Pages anonymes/processus : {{processes}} · Fichiers : {{files}} · Mémoire partagée : {{shared}} Mio",
+    "measured": "Échantillon mémoire : {{date}}",
+    "historical": "Les mesures conservées sont historiques. Des volumes supprimés ne sont plus un stockage disponible.",
+    "sync": "Synchroniser conserve /data, les caches et les volumes ; les fichiers sources peuvent être remplacés. Le mode redémarrage peut relancer le processus.",
+    "destroy": "Arrêter, expirer ou recréer supprime les volumes temporaires, y compris /data et les caches. Les sources originales sont conservées."
   }
 }
