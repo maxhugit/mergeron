@@ -76,16 +76,21 @@ export function DeliverableGitBadge({
     <button
       type="button"
       onClick={() => sync.openReview(itemId)}
-      className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-[11px] hover:bg-muted ${colors(state)}`}
+      className={`inline-flex h-7 shrink-0 items-center justify-center rounded text-[11px] hover:bg-muted ${state === 'ready' ? 'max-w-48 gap-1 px-2' : 'w-7'} ${colors(state)}`}
       title={t(translationKey(labels[state]))}
     >
       <Icon
-        className={`h-3.5 w-3.5 ${['checking', 'syncing'].includes(state) ? 'animate-spin' : ''}`}
+        className={`h-3.5 w-3.5 shrink-0 ${['checking', 'syncing'].includes(state) ? 'animate-spin' : ''}`}
         aria-hidden="true"
       />
       <span className="sr-only">
         {t('deliverableGitStatus')}: {t(translationKey(labels[state]))}
       </span>
+      {state === 'ready' && (
+        <span className="truncate" aria-hidden="true">
+          {t('deliverableGitSynchronized')}
+        </span>
+      )}
     </button>
   );
 }
