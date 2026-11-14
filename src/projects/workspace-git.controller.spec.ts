@@ -3,9 +3,9 @@ import { PATH_METADATA, METHOD_METADATA } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
 import { expect, it, vi } from 'vitest';
 import { WorkspaceGitController } from './workspace-git.controller';
-import type { WorkspaceGitService } from './workspace-git.service';
-import type { WorkspaceGitActionsService } from './workspace-git-actions.service';
-import type { WorkspaceCopiesService } from './workspace-copies.service';
+import { WorkspaceGitService } from './workspace-git.service';
+import { WorkspaceGitActionsService } from './workspace-git-actions.service';
+import { WorkspaceCopiesService } from './workspace-copies.service';
 
 it.each(['restoreReview', 'restore'] as const)(
   'routes %s through the protected copy action service',
@@ -189,5 +189,50 @@ it('routes merge history and post-merge checks through read-only connection endp
     expect(Reflect.getMetadata(PATH_METADATA, handler)).toContain(
       `connections/:resourceId/${suffix}`,
     );
+  }
+});
+
+it('exports the dated remote observation in the snapshot OpenAPI contract', async () => {
+  const { Test } = await import('@nestjs/testing');
+  const { SwaggerModule, DocumentBuilder } = await import('@nestjs/swagger');
+  const { FastifyAdapter } = await import('@nestjs/platform-fastify');
+  const module = await Test.createTestingModule({
+    controllers: [WorkspaceGitController],
+    providers: [
+      WorkspaceGitService,
+      WorkspaceGitActionsService,
+      WorkspaceCopiesService,
+    ].map((provide) => ({ provide, useValue: {} })),
+  }).compile();
+  const app = module.createNestApplication(new FastifyAdapter());
+  try {
+    app.setGlobalPrefix('api');
+    const doc = SwaggerModule.createDocument(
+      app,
+      new DocumentBuilder().addBearerAuth().build(),
+      {
+        operationIdFactory: (_, method) => `workspaceGit_${method}`,
+      },
+    );
+    const url = '/api/projects/{projectId}/git/copies/{copyId}';
+    expect(doc.paths[url].get!.responses['200']).toMatchObject({
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/GitSnapshotDto' },
+        },
+      },
+    });
+    expect(doc.components!.schemas!.GitRemoteObservationDto).toMatchObject({
+      required: ['branch', 'sha', 'checkedAt', 'source', 'ahead', 'behind'],
+    });
+    if (process.env.GIT_OPENAPI_EXPORT) {
+      const { writeFile } = await import('node:fs/promises');
+      await writeFile(
+        process.env.GIT_OPENAPI_EXPORT,
+        JSON.stringify({ ...doc, paths: { [url]: doc.paths[url] } }),
+      );
+    }
+  } finally {
+    await app.close();
   }
 });

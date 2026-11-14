@@ -934,6 +934,14 @@ export class WorkspaceGitActionsService {
             `option no-deref\n${tracking ? `update ${ref} ${sha} ${old || '0'.repeat(sha.length)}` : `create ${ref} ${sha}`}\n`,
           ),
         );
+        this.git.recordRemoteObservation(
+          projectId,
+          copyId,
+          source.resource.address!,
+          name,
+          sha,
+          'fetch',
+        );
         this.audit(projectId, copyId, 'git_remote_branch_retrieved', {
           branch: name,
           sha,
@@ -1743,6 +1751,16 @@ export class WorkspaceGitActionsService {
           ],
           env,
           120000,
+        );
+        // A successful isolated push does not update the clone's tracking refs.
+        // Keep the confirmed SHA as a dated observation; never relabel old refs as current.
+        this.git.recordRemoteObservation(
+          projectId,
+          copyId,
+          source.resource.address!,
+          branch,
+          state.head,
+          'push',
         );
         this.audit(projectId, copyId, 'git_push', {
           branch,

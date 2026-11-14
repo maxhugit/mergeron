@@ -353,6 +353,7 @@ export function GitRestoreGithubAction(
       <Button
         size="sm"
         variant="outline"
+        className="h-auto max-w-full whitespace-normal text-left"
         disabled={
           !props.writable ||
           !props.snapshot.head ||
@@ -361,7 +362,7 @@ export function GitRestoreGithubAction(
         }
         onClick={() => setOpen(true)}
       >
-        <CloudDownload className="mr-2 size-4" />
+        <CloudDownload className="mr-2 size-4 shrink-0" />
         {t('gitRestoreGithub')}
       </Button>
       {open && (

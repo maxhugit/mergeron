@@ -60,6 +60,42 @@ export class WorkspaceGitService {
       promise: Promise<WorkflowObservation>;
     }
   >();
+  // Process-local evidence: a restart or connection change makes freshness unknown.
+  private readonly remoteObservations = new Map<
+    string,
+    {
+      address: string;
+      branch: string;
+      sha: string;
+      checkedAt: number;
+      source: 'push' | 'fetch';
+    }
+  >();
+
+  recordRemoteObservation(
+    projectId: string,
+    copyId: string,
+    address: string,
+    branch: string,
+    sha: string,
+    source: 'push' | 'fetch',
+  ) {
+    if (!/^[a-f0-9]{40,64}$/.test(sha)) return;
+    const key = JSON.stringify([projectId, copyId]);
+    this.remoteObservations.delete(key);
+    this.remoteObservations.set(key, {
+      address,
+      branch,
+      sha,
+      checkedAt: Date.now(),
+      source,
+    });
+    if (this.remoteObservations.size > 1000)
+      this.remoteObservations.delete(
+        this.remoteObservations.keys().next().value!,
+      );
+  }
+
   constructor(
     private readonly copies: WorkspaceCopiesService,
     private readonly resources: WorkspaceResourcesService,
@@ -271,7 +307,58 @@ export class WorkspaceGitService {
     const current = branches.find(
       (item) => !item.remote && item.name === branch.trim(),
     );
+    const copy = this.copies
+      .list(projectId)
+      .find((item) => item.id === copyId)!;
+    const address = this.resources.resolveForTransfer(
+      projectId,
+      copy.sourceResourceId,
+    ).resource.address;
+    const observed = this.remoteObservations.get(
+      JSON.stringify([projectId, copyId]),
+    );
+    let remoteObservation: {
+      branch: string;
+      sha: string;
+      checkedAt: number;
+      source: 'push' | 'fetch';
+      ahead: number;
+      behind: number;
+    } | null = null;
+    if (
+      observed &&
+      observed.address === address &&
+      observed.branch === branch.trim() &&
+      head.trim()
+    ) {
+      try {
+        const counts = (
+          await this.git(cwd, [
+            'rev-list',
+            '--left-right',
+            '--count',
+            `${head.trim()}...${observed.sha}`,
+            '--',
+          ])
+        )
+          .trim()
+          .split(/\s+/)
+          .map(Number);
+        if (counts.length === 2 && counts.every(Number.isSafeInteger))
+          remoteObservation = {
+            branch: observed.branch,
+            sha: observed.sha,
+            checkedAt: observed.checkedAt,
+            source: observed.source,
+            ahead: counts[0],
+            behind: counts[1],
+          };
+      } catch {
+        /* Pruned objects cannot support a comparison. */
+      }
+    }
     return {
+      remoteObservation,
       branch: branch.trim() || null,
       head: head.trim(),
       fingerprint: gitStateFingerprint(

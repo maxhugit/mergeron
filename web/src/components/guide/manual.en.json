@@ -1790,6 +1790,7 @@
           {
             "title": "Read the repository",
             "paragraphs": [
+              "Synchronization separates the local commit, potentially stale local tracking references and the last remote commit confirmed by a Mergeron push or retrieval. Its timestamp records a historical observation; a restart or another branch or connection makes that comparison unknown.",
               "Local shows the working copy, current branch, changes and known references. The graph links commits to parents; select a commit to view details.",
               "Below the repository name, Local shows the branch and revision of this agent’s copy, or No local copy. The explorer shows the workspace name and relative path; hover to see the complete technical path.",
               "In Files, red names indicate unstaged changes, including new files. The trailing … menu combines file and Git actions: view differences, stage for commit or unstage. Deleted files are also listed so their deletion can be staged.",

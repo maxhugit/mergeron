@@ -4592,3 +4592,56 @@ export type PreviewsContainersResponses = {
 };
 
 export type PreviewsContainersResponse = PreviewsContainersResponses[keyof PreviewsContainersResponses];
+
+export type GitRemoteObservationDto = {
+    branch: string;
+    sha: string;
+    checkedAt: number;
+    source: 'push' | 'fetch';
+    ahead: number;
+    behind: number;
+};
+
+export type GitSnapshotChangeDto = {
+    path: string;
+    originalPath?: string;
+    status: string;
+};
+
+export type GitSnapshotBranchDto = {
+    name: string;
+    remote: boolean;
+    revision: string;
+    upstream: string;
+    tracking: string;
+};
+
+export type GitSnapshotDto = {
+    remoteObservation?: GitRemoteObservationDto | null;
+    fingerprint: string;
+    branch: string | null;
+    head: string;
+    ahead: number;
+    behind: number;
+    upstream: string | null;
+    branchesLimited: boolean;
+    inspectedAt: number;
+    changes: Array<GitSnapshotChangeDto>;
+    branches: Array<GitSnapshotBranchDto>;
+};
+
+export type WorkspaceGitSnapshot1Data = {
+    body?: never;
+    path: {
+        projectId: string;
+        copyId: string;
+    };
+    query?: never;
+    url: '/api/projects/{projectId}/git/copies/{copyId}';
+};
+
+export type WorkspaceGitSnapshot1Responses = {
+    200: GitSnapshotDto;
+};
+
+export type WorkspaceGitSnapshot1Response = WorkspaceGitSnapshot1Responses[keyof WorkspaceGitSnapshot1Responses];

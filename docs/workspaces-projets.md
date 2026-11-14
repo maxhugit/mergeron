@@ -254,3 +254,16 @@ Le principal ne peut pas être détaché, remplacé, renommé, déplacé ou supp
 La suppression confirmée du projet conserve le choix existant : préserver ses dossiers ou sélectionner ceux à supprimer physiquement, principal compris. Les secondaires détachés restent sur disque. Les activités qui les référencent passent à l'état **À résoudre** et ne basculent pas vers le principal.
 
 Avant de déployer, sauvegarder la base et le volume `/workspaces` ensemble, y compris les racines système et brouillons séparées. Le stockage contenant `/workspaces` doit être persistant et accessible en écriture au serveur. La migration concerne une seule instance Mergeron : arrêter les autres instances partageant les volumes et éviter les modifications directes sur disque pendant l'opération. Un retour vers une ancienne version nécessite la restauration cohérente de cette sauvegarde, car l'ancienne version attend une autre organisation et d’autres chemins d’historique ; un simple renommage du dossier ne suffit pas.
+
+## Fraîcheur des observations Git
+
+Synchronisation distingue le commit local, les compteurs des références locales
+(non synchronisées automatiquement) et le dernier commit distant confirmé par un
+push ou une récupération Mergeron. Cette observation indique sa date, sa branche
+et sa source ; le serveur peut avoir évolué depuis. Les écarts sont recalculés
+contre ce commit observé, sans exécuter de fetch pendant une simple lecture.
+Le push isolé ne réécrit pas les références locales d’un autre remote.
+Une nouvelle branche, une autre connexion, un redémarrage de Mergeron ou un objet
+Git devenu indisponible rendent la comparaison distante inconnue. Un push externe
+au parcours Mergeron ne produit pas de preuve de fraîcheur. Aucun compteur local
+n’est présenté comme une lecture actuelle du serveur.

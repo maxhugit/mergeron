@@ -83,6 +83,14 @@ vi.mock('@/lib/projects-api', () => ({
         head: 'a'.repeat(40),
         ahead: 2,
         behind: 1,
+        remoteObservation: {
+          branch: 'main',
+          sha: 'b'.repeat(40),
+          checkedAt: 1700000000000,
+          source: 'push',
+          ahead: 0,
+          behind: 0,
+        },
         upstream: 'origin/main',
         changes: localFixture.changes ?? [
           {
@@ -528,6 +536,8 @@ test.each([260, 330, 600])(
       ).toHaveLength(1);
       expect(screen.queryByRole('button', { name: 'Commit…' })).toBeNull();
       expect(fixture.scrollWidth).toBeLessThanOrEqual(width);
+      await screen.findByText(/Branche distante main observée/);
+      await screen.findByText(/Commit local :/);
       await page.screenshot({
         path: `../../../.vitest-screenshots/git-sync-${width}.png`,
       });

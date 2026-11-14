@@ -2855,6 +2855,37 @@ describe('confirmed actions', () => {
       );
       expect(pushed).toHaveLength(1);
       expect(await readFile(path.join(cwd, '.git/index'))).toEqual(index);
+      const observed = (await service.snapshot('p', copyId)).remoteObservation;
+      expect(observed).toMatchObject({
+        sha: state.head,
+        branch: 'main',
+        source: 'push',
+        ahead: 0,
+        behind: 0,
+      });
+      expect(observed!.checkedAt).toBeGreaterThan(0);
+      await writeFile(path.join(cwd, 'after-push.txt'), 'new commit');
+      await git(['add', 'after-push.txt']);
+      await git([
+        '-c',
+        'user.name=Test',
+        '-c',
+        'user.email=test@example.invalid',
+        'commit',
+        '-m',
+        'after push',
+      ]);
+      expect(
+        (await service.snapshot('p', copyId)).remoteObservation,
+      ).toMatchObject({ sha: state.head, ahead: 1, behind: 0 });
+      resources.update('p', 'remote', {
+        address: 'https://github.com/example/other.git',
+      });
+      expect(
+        (await service.snapshot('p', copyId)).remoteObservation,
+      ).toBeNull();
+      await git(['reset', '--hard', state.head]);
+
       expect((await service.snapshot('p', copyId)).head).toBe(state.head);
       if (native) expect(assertActive).toHaveBeenCalledTimes(3);
     },

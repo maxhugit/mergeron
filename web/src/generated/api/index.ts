@@ -50,3 +50,6 @@ export type { PreviewRuntimeVersionsDto, PreviewExecutionIssueDto, PreviewExecut
 
 export { previewsContainers } from './sdk.gen';
 export type { PreviewContainerMemoryDto, PreviewContainerDto, PreviewContainersDto, PreviewsContainersData, PreviewsContainersResponses, PreviewsContainersResponse } from './types.gen';
+
+export { workspaceGitSnapshot1 } from './sdk.gen';
+export type { GitRemoteObservationDto, GitSnapshotDto, GitSnapshotChangeDto, GitSnapshotBranchDto, WorkspaceGitSnapshot1Data, WorkspaceGitSnapshot1Responses, WorkspaceGitSnapshot1Response } from './types.gen';
