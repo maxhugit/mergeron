@@ -135,3 +135,12 @@ aucune capacité à l’agent ou à l’application. Les marqueurs HTML/CSS appa
 au projet et restent des observations non fiables pour toute décision de droits.
 Leurs concordances ne prouvent pas la totalité d’une compilation. Les ressources
 illisibles restent inconnues ; CSP, TLS et contrôles d’origine ne sont pas réduits.
+
+Le diagnostic HMR n’injecte aucun code dans un projet sans intégration explicite.
+L’adaptateur Vite conserve les protections du serveur et de l’application. Ses
+relevés sont des observations applicatives sans autorité : seules des propriétés
+bornées et autorisées passent entre le cadre et le diagnostic, avec origine,
+fenêtre source et identifiant de requête vérifiés. Les messages HMR bruts, chemins,
+en-têtes, cookies et jetons ne sont pas relayés. Une connexion de secours hors de
+la preview ne valide pas le parcours public ; les observations absentes restent
+inconnues. La surveillance est bornée et ne modifie pas les données du projet.

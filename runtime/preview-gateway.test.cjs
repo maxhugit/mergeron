@@ -352,6 +352,12 @@ test('verification requires the existing personal grant, never forwards tokens o
     const unauthorized = response();
     await gateway.handle(get('/.__mergeron_preview/receipt'), unauthorized);
     assert.equal(unauthorized.statusCode, 401);
+    const unauthorizedAdapter = response();
+    await gateway.handle(
+      get('/.__mergeron_preview/vite-plugin.mjs'),
+      unauthorizedAdapter,
+    );
+    assert.equal(unauthorizedAdapter.statusCode, 401);
     const link = await gateway.mint(grant);
     const token = new URLSearchParams(new URL(link.url).hash.slice(1)).get(
       'mergeron-preview',
@@ -370,6 +376,15 @@ test('verification requires the existing personal grant, never forwards tokens o
       sourceCurrent: true,
     });
     assert.equal(observed.body.includes('d'.repeat(64)), false);
+    const adapter = response();
+    await gateway.handle(
+      get('/.__mergeron_preview/vite-plugin.mjs', cookie),
+      adapter,
+    );
+    assert.equal(adapter.statusCode, 200);
+    assert.match(adapter.headers['content-disposition'], /attachment/);
+    assert.match(adapter.body, /export function mergeronPreview/);
+    assert.equal(adapter.body.includes(token), false);
     const page = response();
     await gateway.handle(
       get('/.__mergeron_preview/verify?path=%2F', cookie),

@@ -680,3 +680,11 @@ Le statut des previews expose aussi le reçu de la source synchronisée (génér
 copie Git, commit observé, empreinte et date). Ce reçu ne confirme pas la
 compilation ni le rendu navigateur. Le [diagnostic de génération](environnement-test.md#vérifier-la-génération-affichée)
 utilise une session personnelle autorisée sans remettre de jeton à l’agent.
+
+Pour le hot reload, le diagnostic navigateur distingue la réception des fichiers,
+la détection du reçu par le serveur, un aller-retour par le vrai canal HMR et le
+style calculé attendu. L’[intégration Vite](environnement-test.md#diagnostic-hot-reload-vite)
+s’installe explicitement dans le projet ; elle ne remplace pas les plugins ou
+protections existants. Ne pas annoncer une réussite pour Next.js ou un serveur
+sans adaptateur : conserver ses étapes inconnues. Un WebSocket connecté ne
+suffit pas à confirmer le CSS et la surveillance ne recharge pas la page.
