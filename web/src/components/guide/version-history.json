@@ -1,5 +1,23 @@
 [
   {
+    "tag": "v0.8.4",
+    "date": "2026-11-14",
+    "highlights": {
+      "fr": [
+        "Consignes Git associées aux agents indépendamment de leur dossier actif, préférences de profil et suivi du rafraîchissement du contexte.",
+        "Consultation des exécutions GitHub Actions et des journaux de jobs par les agents du projet, avec maintien des contrôles d’accès.",
+        "Aperçus vérifiables : générations synchronisées, diagnostic du hot reload Vite, accès et exécution mieux expliqués, journaux conservés après arrêt.",
+        "Livrables : indication explicite de synchronisation locale dans les en-têtes ; correction du marqueur CSS lorsque le reçu de synchronisation arrive après le hot reload."
+      ],
+      "en": [
+        "Git instruction sources assigned to agents independently of their active directory, profile preferences and context refresh tracking.",
+        "Project agents can inspect GitHub Actions runs and job logs while preserving access controls.",
+        "Verifiable previews: synchronized generations, Vite hot reload diagnostics, clearer access and execution diagnostics, and logs retained after stopping.",
+        "Deliverables show an explicit local synchronization label in their headers; CSS generation markers refresh when synchronization receipts arrive after hot reload."
+      ]
+    }
+  },
+  {
     "tag": "v0.8.3",
     "date": "2026-11-13",
     "highlights": {
@@ -259,8 +277,12 @@
     "tag": "v0.5.1",
     "date": "2026-10-29",
     "highlights": {
-      "fr": ["Navigateur isolé pris en charge par le Manager en production."],
-      "en": ["Manager support for the isolated browser in production."]
+      "fr": [
+        "Navigateur isolé pris en charge par le Manager en production."
+      ],
+      "en": [
+        "Manager support for the isolated browser in production."
+      ]
     }
   },
   {
