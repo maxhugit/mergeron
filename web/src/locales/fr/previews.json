@@ -195,5 +195,19 @@
       "expired": "L’environnement a atteint sa durée de vie et a été arrêté.",
       "userStop": "Arrêt demandé depuis Mergeron."
     }
+  },
+  "executionChecks": {
+    "title": "Contrôle du lancement",
+    "mode": "NODE_ENV : {{mode}} · Port déclaré : {{port}}",
+    "portConflict": "PORT contredit le port déclaré. Corrigez la recette avant de lancer.",
+    "modeOverride": "La commande change NODE_ENV par rapport à la recette. Rendez ces valeurs cohérentes.",
+    "modeConflict": "Le serveur de développement ou de production reconnu ne correspond pas à NODE_ENV.",
+    "commandUnknown": "Commande personnalisée : son mode réel ne peut pas être déduit sans l’exécuter. Vérifiez le script et la recette.",
+    "modeUnknown": "La valeur NODE_ENV enregistrée n’est pas un mode reconnu ; sa valeur reste masquée.",
+    "hotProduction": "Mode production avec synchronisation à chaud : une copie de fichiers ne recompile pas automatiquement le serveur.",
+    "backgroundServer": "La commande se termine par un lancement en arrière-plan. Gardez le serveur au premier plan pour gérer son arrêt.",
+    "versions": "Image au démarrage : Node {{node}} · npm {{npm}} · pnpm {{pnpm}} · Corepack {{corepack}} · Mesuré le {{date}}",
+    "versionsUnknown": "Versions non mesurées pour cet environnement. Le contrôle est effectué à la création ; une valeur absente reste inconnue.",
+    "blocked": "La recette présente un conflit de mode ou de port. Corrigez-la avant le lancement."
   }
 }

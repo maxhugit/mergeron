@@ -1,3 +1,4 @@
+import execution from '../../runtime/preview-execution.cjs';
 /** Generic preview orchestration: approved immutable images, no agent Docker API. */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -573,6 +574,8 @@ export class PreviewManager {
       fail('PREVIEW_INVALID_REQUEST');
     const profile = contract.profile(input.profile);
     if (!profile.enabled || !profile.start.trim()) fail('PREVIEW_DISABLED');
+    if (!execution.executionCheck(profile).valid)
+      fail('PREVIEW_EXECUTION_CONFLICT');
     for (const key of [
       profile.runtime,
       ...profile.services.map((v) => v.runtime),
@@ -823,6 +826,49 @@ export class PreviewManager {
         );
         await this.docker.startContainer(id);
       }
+      // Isolate diagnostics from install/build memory pressure and from project
+      // files. Cover declared image volumes so Docker cannot create anonymous ones.
+      const versionProbe = await this.add(
+        r,
+        'init-runtime-versions',
+        this.catalog[profile.runtime].image,
+        {
+          WorkingDir: '/',
+          Entrypoint: ['/bin/sh', '-c'],
+          Cmd: ['exec sleep 30'],
+          Env: [
+            'PATH=/usr/local/bin:/usr/bin:/bin:/nodejs/bin',
+            'NODE_OPTIONS=',
+            'COREPACK_ENABLE_NETWORK=0',
+            'ENV=',
+            'BASH_ENV=',
+          ],
+          HostConfig: {
+            ...this.base('none'),
+            Tmpfs: {
+              ...this.base('none').Tmpfs,
+              '/workspace': 'ro,nosuid,nodev,size=1m,mode=0000',
+              '/data': 'ro,nosuid,nodev,size=1m,mode=0000',
+              '/cache': 'ro,nosuid,nodev,size=1m,mode=0000',
+              '/tmp': 'rw,nosuid,nodev,size=8m,mode=1777',
+            },
+          },
+        },
+      );
+      try {
+        await this.docker.startContainer(versionProbe);
+        await this.owned(versionProbe, r, 'preview-init-runtime-versions');
+        r.runtimeVersions =
+          await this.docker.previewRuntimeVersions(versionProbe);
+      } catch {
+        r.runtimeVersions = null;
+      } finally {
+        await this.removeObject(
+          r,
+          r.objects.find((o) => o.id === versionProbe),
+        );
+      }
+      this.save(r);
       const runtime = await this.add(
         r,
         'app',
@@ -853,7 +899,7 @@ export class PreviewManager {
             'MERGERON_PREVIEW_RECEIPT_PATH=/workspace/.mergeron-preview-receipt.json',
             '__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=' + r.publicHost,
             ...Object.entries(profile.env)
-              .filter(([k]) => k !== 'NODE_ENV')
+              .filter(([k]) => !['NODE_ENV', 'PORT'].includes(k))
               .map(([k, v]) => `${k}=${v}`),
           ],
           HostConfig: {
@@ -1078,6 +1124,7 @@ export class PreviewManager {
       agentId: r.agentId,
       state: r.state,
       execution: r.execution ?? null,
+      runtimeVersions: r.runtimeVersions ?? null,
       termination: r.termination ?? null,
       cleanupComplete:
         r.state === 'stopped' &&

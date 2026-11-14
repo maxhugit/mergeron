@@ -1,3 +1,4 @@
+import type { PreviewExecutionCheckDto } from '@/generated/api';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +18,7 @@ import {
 import type { PreviewProfile } from '../../../../runtime/preview-profile.cjs';
 
 export interface LaunchConfiguration {
+  executionCheck?: PreviewExecutionCheckDto | null;
   profile: PreviewProfile | null;
   policyRevision: string;
   recipeRevision: string | null;
@@ -25,6 +27,44 @@ export interface LaunchConfiguration {
   stale: boolean;
   sourcePath: string | null;
   sourceError?: string | null;
+}
+function ExecutionCheckSummary({
+  check,
+}: {
+  check?: PreviewExecutionCheckDto | null;
+}) {
+  const { t } = useTranslation('previews');
+  if (!check) return null;
+  const messages: Record<string, string> = {
+    portConflict: t('executionChecks.portConflict'),
+    modeOverride: t('executionChecks.modeOverride'),
+    modeConflict: t('executionChecks.modeConflict'),
+    commandUnknown: t('executionChecks.commandUnknown'),
+    modeUnknown: t('executionChecks.modeUnknown'),
+    hotProduction: t('executionChecks.hotProduction'),
+    backgroundServer: t('executionChecks.backgroundServer'),
+  };
+  return (
+    <section
+      className="space-y-1 rounded border p-2 text-xs"
+      aria-label={t('executionChecks.title')}
+    >
+      <p>{t('executionChecks.mode', { mode: check.mode, port: check.port })}</p>
+      {check.issues.map((issue, index) => (
+        <p
+          key={index}
+          role={issue.severity === 'error' ? 'alert' : 'status'}
+          className={
+            issue.severity === 'error'
+              ? 'text-destructive'
+              : 'text-muted-foreground'
+          }
+        >
+          {messages[issue.code] ?? t('executionChecks.commandUnknown')}
+        </p>
+      ))}
+    </section>
+  );
 }
 export function PreviewCommands({
   configuration,
@@ -36,6 +76,7 @@ export function PreviewCommands({
   if (!profile) return <p role="alert">{t('recipeMissing')}</p>;
   return (
     <div className="min-w-0 space-y-3 text-sm">
+      <ExecutionCheckSummary check={configuration.executionCheck} />
       {configuration.stale && (
         <p role="alert" className="text-amber-700 dark:text-amber-400">
           {t('recipeStale')}
@@ -144,6 +185,7 @@ export function PreviewLaunchDialog({
               query.isError ||
               !query.data?.profile ||
               query.data.stale ||
+              query.data.executionCheck?.valid === false ||
               !query.data.revision ||
               !query.data.sourcePath ||
               !!query.data.sourceError
@@ -356,6 +398,7 @@ function RecipeEditor({
     <>
       <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
         {configuration.stale && <p role="status">{t('recipeStale')}</p>}
+        <ExecutionCheckSummary check={configuration.executionCheck} />
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           {(['runtime', 'directory', 'port', 'path'] as const).map((key) => (
             <label className="grid min-w-0 gap-1 text-sm" key={key}>

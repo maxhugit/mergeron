@@ -195,5 +195,19 @@
       "expired": "The environment reached its lifetime and was stopped.",
       "userStop": "Stop requested from Mergeron."
     }
+  },
+  "executionChecks": {
+    "title": "Launch checks",
+    "mode": "NODE_ENV: {{mode}} · Declared port: {{port}}",
+    "portConflict": "PORT conflicts with the declared port. Correct the recipe before launching.",
+    "modeOverride": "The command overrides the recipe NODE_ENV. Make these values consistent.",
+    "modeConflict": "The recognized development or production server does not match NODE_ENV.",
+    "commandUnknown": "Custom command: its effective mode cannot be inferred without execution. Check the script and recipe.",
+    "modeUnknown": "The stored NODE_ENV is not a recognized mode; its value remains hidden.",
+    "hotProduction": "Production mode with hot synchronization: copying files does not automatically rebuild the server.",
+    "backgroundServer": "The command ends with a background launch. Keep the server in the foreground to manage shutdown.",
+    "versions": "Image at startup: Node {{node}} · npm {{npm}} · pnpm {{pnpm}} · Corepack {{corepack}} · Measured {{date}}",
+    "versionsUnknown": "Versions were not measured for this environment. Measurement runs at creation; missing values remain unknown.",
+    "blocked": "The recipe contains a mode or port conflict. Correct it before launch."
   }
 }

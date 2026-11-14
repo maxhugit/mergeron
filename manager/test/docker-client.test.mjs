@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { EventEmitter } from 'node:events';
@@ -236,5 +237,67 @@ test('container cleanup never forces removal or deletes volumes', async () => {
   assert.equal(
     mock.requests[0].options.path,
     '/containers/exact-helper?force=false&v=false',
+  );
+});
+
+test('preview version probe uses only fixed unprivileged image binaries and whitelisted metadata', async () => {
+  const docker = new DockerClient();
+  const calls = [];
+  docker.request = async (path, options) => {
+    calls.push({ path, options });
+    if (path.endsWith('/exec')) return { Id: 'version-probe' };
+    if (path.endsWith('/start'))
+      return 'MERGERON_RUNTIME:{"node":"22.23.3","npm":"10.9.0","pnpm":"not-a-version-secret","corepack":"0.34.0","secret":"private"}\n';
+    return { Running: false, ExitCode: 0 };
+  };
+  const result = await docker.previewRuntimeVersions('owned-app');
+  assert.equal(result.node, '22.23.3');
+  assert.equal(result.pnpm, null);
+  assert.equal(result.corepack, '0.34.0');
+  assert.doesNotMatch(JSON.stringify(result), /private|secret/);
+  const spec = calls[0].options.body;
+  assert.equal(spec.User, '11002:11002');
+  assert.equal(spec.Privileged, false);
+  assert.equal(spec.WorkingDir, '/');
+  assert.equal(spec.Tty, true);
+  assert.equal(spec.AttachStdin, false);
+  assert.deepEqual(spec.Env, [
+    'PATH=/usr/local/bin:/usr/bin:/bin:/nodejs/bin',
+    'NODE_OPTIONS=',
+    'COREPACK_ENABLE_NETWORK=0',
+  ]);
+  assert.equal(calls[1].options.maxResponseBytes, 4096);
+  assert.ok(spec.Cmd[2].includes('fs.readFileSync'));
+  assert.ok(!spec.Cmd[2].includes('execFile'));
+});
+
+test('the fixed probe command executes without printing inherited secrets or running a package manager', async () => {
+  const docker = new DockerClient();
+  let command;
+  docker.request = async (path, options) => {
+    if (path.endsWith('/exec')) {
+      command = options.body.Cmd[2];
+      return { Id: 'probe' };
+    }
+    if (path.endsWith('/start')) {
+      const quoted = "'" + process.execPath.replaceAll("'", "'\\''") + "'";
+      const script = command.replace(
+        'for binary in /usr/local/bin/node /usr/bin/node /nodejs/bin/node;',
+        'for binary in ' + quoted + ';',
+      );
+      const result = spawnSync('/bin/sh', ['-c', script], {
+        encoding: 'utf8',
+        timeout: 3000,
+        env: { ...process.env, PRIVATE_CANARY: 'not-for-version-output' },
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.doesNotMatch(result.stdout, /not-for-version-output/);
+      return result.stdout;
+    }
+    return { Running: false, ExitCode: 0 };
+  };
+  assert.equal(
+    (await docker.previewRuntimeVersions('owned')).node,
+    process.versions.node,
   );
 });

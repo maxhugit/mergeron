@@ -161,3 +161,18 @@ isolée peuvent utiliser des images différentes. Une nouvelle commande d’agen
 n’hérite pas des exports d’une précédente ; utiliser les variables de la recette
 pour le serveur de preview. Ses trois phases conservent, elles, les exports et
 le dossier de travail dans un même shell.
+
+Le rapport texte du contrôle préalable annonce aussi le Node effectif et le mode
+NODE_ENV. Le rapport JSON décrit séparément commandes d’agent, terminal et
+preview : une écoute sur localhost dans un contexte n’est pas une preuve de
+joignabilité dans un autre. Pour un serveur testé entre plusieurs appels,
+utiliser le [cycle de vie et le terminal de la preview](previsualisations-agents.md#contrôle-de-lenvironnement-de-lancement),
+puis le navigateur autorisé pour vérifier le proxy HTTPS. Le lanceur Core ne
+produit aucune bannière sur stdout, afin de préserver le protocole app-server.
+
+Sous Linux, le rapport lit les identifiants de namespace PID et réseau dans deux
+liens fixes de `/proc/self/ns`. Ils permettent de comparer deux appels sans
+exposer d’adresse ou de liste de processus. Une lecture refusée ou un système
+sans ces liens retourne « inconnu ». Des identifiants identiques ne prouvent
+pas les mêmes droits ni la joignabilité : conserver les sondes d’écoute et de
+connexion, ainsi que les contrôles de sandbox et proxy.

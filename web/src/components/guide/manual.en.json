@@ -1041,6 +1041,14 @@
               "Total RAM includes tmpfs pages charged to the container. File and shared memory overlap; volume usage must not be added to this total. Missing measurements mean unknown, never zero.",
               "The stop cause is retained: Docker-confirmed OOM, process exit, startup deadline, expiry or requested stop. Exit 137 alone does not prove an OOM; a full volume is a separate diagnostic. Stopped measurements are historical and temporary volumes are deleted on stop, recreation or expiry."
             ]
+          },
+          {
+            "title": "Check the launch contract",
+            "paragraphs": [
+              "The recipe shows NODE_ENV and its port before launch. Conflicting ports, incompatible modes for recognized commands and explicitly detached servers are blocked. Custom scripts remain possible with a warning: their names do not prove their modes.",
+              "Install and build must restore NODE_ENV and PORT before startup if they change them. Other exports remain shared across phases. Image versions are observed once at launch and timestamped; missing tools remain unknown.",
+              "For tests across multiple calls, launch the server through the recipe and use its container terminal for localhost. The workspace has a separate context; the public browser uses the authorized URL. Closing a diagnostic shell does not stop the managed server."
+            ]
           }
         ],
         "related": [

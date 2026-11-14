@@ -51,6 +51,21 @@ export function PreviewRuntimeDiagnostics({
             ) : (
               <p>{t('runtimeDiagnostics.legacy')}</p>
             )}
+            {data.runtimeVersions ? (
+              <p>
+                {t('executionChecks.versions', {
+                  node: data.runtimeVersions.node ?? '—',
+                  npm: data.runtimeVersions.npm ?? '—',
+                  pnpm: data.runtimeVersions.pnpm ?? '—',
+                  corepack: data.runtimeVersions.corepack ?? '—',
+                  date: new Date(
+                    data.runtimeVersions.checkedAt,
+                  ).toLocaleString(),
+                })}
+              </p>
+            ) : (
+              <p>{t('executionChecks.versionsUnknown')}</p>
+            )}
             {data.termination && (
               <div role="status">
                 <p>{causeLabels[data.termination.cause]}</p>

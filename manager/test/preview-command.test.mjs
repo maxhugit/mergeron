@@ -96,3 +96,17 @@ test('empty optional phases and a trailing comment remain valid', () => {
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, 'ok');
 });
+
+test('install/build cannot silently leave a different launch mode or port; custom exports still persist', () => {
+  for (const variable of ['NODE_ENV', 'PORT']) {
+    const result = run({
+      install: `export ${variable}=unexpected-private-value`,
+      build: '',
+      start: 'printf SERVER_STARTED',
+    });
+    assert.equal(result.status, 65);
+    assert.doesNotMatch(result.stdout, /SERVER_STARTED/);
+    assert.match(result.stderr, /execution_environment_changed/);
+    assert.doesNotMatch(result.stderr, /unexpected-private-value/);
+  }
+});

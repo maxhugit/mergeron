@@ -201,3 +201,10 @@ Conserver cette définition et une [sauvegarde externe](sauvegarde-restauration.
 ## Compétences optionnelles
 
 Une installation neuve ne crée ni navigateur isolé ni service de transcription. Un administrateur peut les installer et les désinstaller dans **Serveur → Compétences**. Voir le [guide des compétences](server-capabilities.md) pour les protections, la migration des installations existantes et les états à la demande.
+
+Les contrôles de recette et les observations de versions de preview nécessitent
+les images application et Manager correspondantes. Le contrôle de versions
+utilise un helper jetable sans réseau, sources ou secrets, retiré avant le
+lancement applicatif. Il ne demande aucun port, montage d’hôte ou privilège
+supplémentaire ; une image sans binaire compatible garde ses versions inconnues.
+Voir le [contrat de lancement](previsualisations-agents.md#contrôle-de-lenvironnement-de-lancement).

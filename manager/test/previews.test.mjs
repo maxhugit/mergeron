@@ -30,6 +30,17 @@ class Docker {
     this.version = '28.2.2';
     this.httpStatus = 200;
   }
+  async previewRuntimeVersions(id) {
+    this.versionProbeCount = (this.versionProbeCount ?? 0) + 1;
+    assert.ok(this.containers.has(id));
+    return {
+      checkedAt: Date.now(),
+      node: '22.23.3',
+      npm: '10.9.0',
+      pnpm: null,
+      corepack: null,
+    };
+  }
   async inspectContainer(id) {
     if (id === 'stack-ui')
       return {
@@ -1148,4 +1159,28 @@ test('requested stop and expiry retain distinct causes and explicit recipe mode 
     (await other.manager.stop(other.input.runId)).termination.cause,
     'user_stop',
   );
+});
+
+test('runtime versions are measured only at launch and cached for readonly inspection', async () => {
+  const f = await fixture();
+  await f.manager.start(f.input);
+  const result = await f.manager.status(f.input.runId);
+  assert.equal(result.runtimeVersions.node, '22.23.3');
+  await f.manager.status(f.input.runId);
+  assert.equal(f.docker.versionProbeCount, 1);
+  const probe = f.docker.created.find(
+    (c) =>
+      c.Config.Labels['io.mergeron.component'] ===
+      'preview-init-runtime-versions',
+  );
+  assert.equal(probe.Config.WorkingDir, '/');
+  assert.equal(probe.Config.HostConfig.NetworkMode, 'none');
+  assert.equal(probe.Config.HostConfig.Mounts, undefined);
+  assert.equal(f.docker.containers.has(probe.Id), false);
+});
+test('mode and port conflicts are rejected before any Docker resource is created', async () => {
+  const f = await fixture();
+  f.input.profile.env = { PORT: '4000' };
+  await assert.rejects(f.manager.start(f.input), /PREVIEW_EXECUTION_CONFLICT/);
+  assert.equal(f.docker.created.length, 0);
 });

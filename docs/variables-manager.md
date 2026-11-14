@@ -151,3 +151,9 @@ ouvrir tout Azure Blob. Une configuration persistante personnalisée est conserv
 reporter la règle dédiée selon les [prérequis d’installation](installation.md).
 Les refus privés, TLS, les restrictions de conteneur et le proxy des aperçus
 restent indépendants et inchangés.
+
+Le contrôle du contrat de lancement et la sonde de versions utilisent le même
+catalogue `MERGERON_PREVIEW_IMAGES` déjà autorisé. Aucune nouvelle variable ou
+permission Docker n’est requise. La sonde est isolée du réseau et des données,
+avec limite technique de 128 Mio, puis supprimée avant le runtime applicatif ;
+les plafonds approuvés pour celui-ci restent inchangés.

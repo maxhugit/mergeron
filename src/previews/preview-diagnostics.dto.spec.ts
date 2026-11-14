@@ -38,3 +38,23 @@ it('projects only known launch and termination evidence without exposing environ
       .termination,
   ).toBeNull();
 });
+
+it('exposes only version-shaped runtime measurements, never package metadata or environment', () => {
+  const result = previewDiagnostics({
+    runtimeVersions: {
+      checkedAt: 1234,
+      node: '22.23.3',
+      npm: '10.9.0',
+      pnpm: 'secret',
+      corepack: null,
+      env: 'private',
+    },
+  });
+  expect(result.runtimeVersions).toEqual({
+    checkedAt: 1234,
+    node: '22.23.3',
+    npm: '10.9.0',
+    pnpm: null,
+    corepack: null,
+  });
+});
