@@ -825,3 +825,53 @@ les caches et les volumes. Le mode `restart` peut relancer le processus dans le
 même conteneur. **Arrêter**, **Recréer** et l’expiration suppriment les volumes
 temporaires, y compris `/data`, `/cache` et `/tmp`, tout en conservant les sources
 originales. Les confirmations de destruction restent distinctes de la synchro.
+
+## Diagnostic HMR Next.js (Webpack)
+
+La page **Génération et vérification navigateur** propose aussi **Télécharger
+l’intégration Next.js (Webpack)**, sous la même autorisation personnelle Mergeron.
+L’archive contient cinq fichiers et un README, sans identifiants. Cette intégration
+facultative est testée sur Next.js 16.4.6 / React 19.3.1, App Router, CSS simple.
+Les modules CSS, préprocesseurs et Turbopack restent non confirmés. Elle ne modifie
+ni les dépendances de l’application, ni les droits, ni les quotas.
+
+Conserver les fichiers ensemble dans le projet et envelopper la configuration
+existante avec `withMergeronPreview` depuis `preview-next-config.mjs`. Les
+configurations objets, fonctions et fonctions asynchrones sont conservées, ainsi
+que leur hook Webpack. Le serveur de diagnostic de développement ajoute seulement
+l’hôte exact fourni par `MERGERON_PREVIEW_PUBLIC_HOST` aux origines existantes,
+sans wildcard ou modification globale de CORS. Les intégrations Next personnalisées
+nécessitent une vérification lors des mises à jour du framework ; voir les
+[options Webpack officielles](https://nextjs.org/docs/app/api-reference/config/next-config-js/webpack),
+[origines de développement](https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins)
+et [serveur personnalisé](https://nextjs.org/docs/app/guides/custom-server).
+
+Dans le `<head>` de `app/layout.js`, ajouter le marqueur produit à la compilation :
+
+```jsx
+<meta name="mergeron-preview-generation"
+  content={process.env.MERGERON_PREVIEW_BUILD_GENERATION} />
+```
+
+La recette approuvée utilise le mode **development**, le rechargement **hot** et
+`node preview-next-server.mjs` comme démarrage. Le helper refuse le mode production
+et choisit explicitement Webpack. Ce parcours ne remplace pas un serveur standalone
+ou de production. En sous-dossier, adapter le chemin de travail de la recette.
+
+Le loader ajoute la génération au CSS réellement transformé et déclare le reçu
+atomique comme dépendance, tout en conservant la chaîne CSS native de Next. Le
+compilateur publie seulement une génération terminée sans erreur. Le navigateur
+observe le vrai WebSocket HMR de Next ; un nonce non authentifiant lie cette
+connexion à l’observation du proxy et son hash de compilation doit correspondre
+à celui du serveur. L’application de la valeur CSS est mesurée séparément dans
+le navigateur autorisé. Le code de diagnostic n’applique aucune mise à jour à la
+place du client Next.
+
+Activer l’observation, modifier puis synchroniser du CSS simple et vérifier les
+quatre étapes. Le test réel reproduit aussi l’arrivée du CSS avant le reçu : le
+marqueur est ensuite recompilé, sans rechargement du document. App Router peut
+actualiser la métadonnée HTML par Fast Refresh ; le résultat peut donc être
+**Marqueurs HTML et CSS concordants** avec le document initial conservé. Les
+styles internes non instrumentés restent explicitement non vérifiés. Une
+compilation en cours, un hash non reçu, un WebSocket bloqué, une génération non
+détectée ou un accès révoqué ne deviennent jamais un résultat HMR confirmé.

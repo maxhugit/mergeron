@@ -367,6 +367,7 @@ COPY scripts/codex-cli-dispatch.sh /usr/local/bin/codex-cli-dispatch
 COPY runtime/preview-execution.cjs runtime/preview-execution.d.cts runtime/preview-profile.cjs runtime/preview-snapshot.py runtime/preview-gateway.cjs /app/runtime/
 COPY runtime/preview-receipt.cjs runtime/preview-verification.cjs runtime/preview-access.cjs runtime/preview-storage.cjs /app/runtime/
 COPY runtime/preview-vite-plugin.mjs /app/runtime/
+COPY runtime/preview-next-state.cjs runtime/preview-next-css-loader.cjs runtime/preview-next-config.mjs runtime/preview-next-client.cjs runtime/preview-next-server.mjs runtime/preview-next-readme.txt runtime/preview-next-adapter.cjs /app/runtime/
 COPY runtime/managed-cli.cjs /app/runtime/managed-cli.cjs
 COPY scripts/resolve-managed-cli.cjs ./scripts/resolve-managed-cli.cjs
 COPY scripts/visual-check.mjs ./scripts/visual-check.mjs

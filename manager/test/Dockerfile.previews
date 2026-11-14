@@ -1,6 +1,7 @@
 ARG MANAGER_IMAGE=mergeron-manager:quality
 FROM ${MANAGER_IMAGE}
 COPY runtime/preview-execution.cjs runtime/preview-execution.d.cts runtime/preview-profile.cjs runtime/preview-archive.cjs runtime/preview-gateway.cjs runtime/preview-storage.cjs runtime/preview-receipt.cjs runtime/preview-verification.cjs runtime/preview-access.cjs runtime/preview-vite-plugin.mjs /opt/runtime/
+COPY runtime/preview-next-state.cjs runtime/preview-next-css-loader.cjs runtime/preview-next-config.mjs runtime/preview-next-client.cjs runtime/preview-next-server.mjs runtime/preview-next-readme.txt runtime/preview-next-adapter.cjs /opt/runtime/
 COPY deployment/browser/public-proxy.mjs /opt/deployment/browser/public-proxy.mjs
 COPY manager/src /opt/mergeron-manager/src
 COPY manager/test/preview-runtime.integration.mjs /opt/mergeron-manager/test/preview-runtime.integration.mjs

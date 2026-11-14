@@ -371,6 +371,7 @@ class PreviewGateway {
       req.method === 'GET' &&
       (req.url === '/.__mergeron_preview/receipt' ||
         req.url === '/.__mergeron_preview/vite-plugin.mjs' ||
+        req.url === '/.__mergeron_preview/next-adapter.tar.gz' ||
         req.url === '/.__mergeron_preview/access' ||
         req.url.startsWith('/.__mergeron_preview/verify?'))
     ) {
@@ -395,6 +396,18 @@ class PreviewGateway {
             application: { state: 'unknown' },
           }),
         );
+      }
+      if (req.url === '/.__mergeron_preview/next-adapter.tar.gz') {
+        const { nextAdapterArchive } = require('./preview-next-adapter.cjs');
+        res.writeHead(200, {
+          'content-type': 'application/gzip',
+          'content-disposition':
+            'attachment; filename="mergeron-next-preview.tar.gz"',
+          'cache-control': 'no-store',
+          'x-content-type-options': 'nosniff',
+          'referrer-policy': 'no-referrer',
+        });
+        return res.end(nextAdapterArchive());
       }
       if (req.url === '/.__mergeron_preview/vite-plugin.mjs') {
         res.writeHead(200, {

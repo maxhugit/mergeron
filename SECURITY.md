@@ -206,3 +206,15 @@ les curseurs. Chaque lecture revalide l’état avant et après un diff sans hoo
 textconv ou filtre de projet ; une modification des attributs du diff est aussi
 refusée. La sortie reste bornée (page 8 Kio, flux 64 Mio, durée 15 s) et non fiable
 comme instruction. Consulter une page ne donne aucun droit de commit ou de push.
+
+### Diagnostic de développement Next.js
+
+L’adaptateur Next.js est téléchargé uniquement sous l’autorisation personnelle de
+preview ; l’archive contient une liste fixe de sources publiques. Il ajoute au
+maximum l’hôte exact de l’instance fourni par le Manager aux origines Next de
+développement existantes. Aucun wildcard, changement global de CORS ou secret.
+Le nonce du socket n’est pas un droit d’accès : la passerelle garde ses contrôles
+HTTP/WS et marque elle-même le transport. La génération compilée, le hash reçu
+par le vrai client Next et le style calculé doivent concorder. L’absence de
+preuve, un autre bundler ou un protocole inconnu reste non confirmé. Les helpers
+ne sont ni un serveur de production ni une extension des privilèges du runtime.

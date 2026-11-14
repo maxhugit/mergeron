@@ -1,0 +1,11 @@
+{
+  "name": "mergeron-next-hmr-fixture",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "next": "16.4.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "packageManager": "pnpm@10.34.9"
+}

@@ -966,6 +966,7 @@
           {
             "title": "Ouvrir l’aperçu et comprendre l’état",
             "paragraphs": [
+              "La vérification navigateur propose les intégrations Vite et Next.js Webpack. L’adaptateur Next.js facultatif est testé sur 16.4.6 / React 19.3.1 avec CSS simple : reçu détecté, compilation, vrai WebSocket via la preview et style calculé doivent concorder. Son archive et son README sont accessibles sous l’autorisation Mergeron. Les origines existantes sont conservées et seul l’hôte exact du Manager est ajouté ; Turbopack et les styles non instrumentés restent non confirmés.",
               "L’icône Environnement de test ouvre un onglet à côté de Conversation. Elle reste neutre à l’arrêt, devient verte lorsque le contrôle confirme un fonctionnement normal et rouge lors d’un problème. Un état de démarrage n’est pas encore une page prête.",
               "Après installation et compilation réussies puis contrôle HTTP, Ouvrir l’aperçu ouvre le vrai site et Copier l’URL donne son adresse. L’origine reste identique pour cet agent après recréation. Rouvrez depuis Mergeron pour autoriser l’accès à la nouvelle instance ; copier l’URL ne donne aucun droit à une autre personne.",
               "Les sources sont synchronisées depuis la copie de l’agent. Le rechargement à chaud dépend du serveur du projet ; un changement de dépendances peut demander une recréation. En cas d’échec d’installation ou de compilation, consultez les logs de cette étape avant de relancer."
