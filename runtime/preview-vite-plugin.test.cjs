@@ -9,8 +9,26 @@ const a = '33333333-3333-4333-8333-333333333333';
 const b = '44444444-4444-4444-8444-444444444444';
 function server() {
   let middleware;
+  const reloads = [];
   const value = {
     ws: new EventEmitter(),
+    environments: {
+      client: {
+        moduleGraph: {
+          idToModuleMap: new Map(
+            [
+              '/style.css',
+              '/theme.css?direct',
+              '/private.module.css',
+              '/main.js',
+            ].map((id) => [id, { id }]),
+          ),
+        },
+        reloadModule: async (module) => {
+          reloads.push(module.id);
+        },
+      },
+    },
     httpServer: new EventEmitter(),
     middlewares: {
       use: (handler) => {
@@ -20,6 +38,7 @@ function server() {
   };
   return {
     value,
+    reloads,
     status() {
       let body,
         next = false;
@@ -57,6 +76,7 @@ test('Vite detects atomic receipt replacement and never exposes arbitrary receip
     const plugin = mergeronPreview({ receiptPath: file });
     plugin.configureServer(s.value);
     assert.equal(s.status().generation, a);
+    assert.deepEqual(s.reloads, []);
     await writeFile(
       file + '.next',
       JSON.stringify({ schemaVersion: 1, generation: b }),
@@ -65,6 +85,15 @@ test('Vite detects atomic receipt replacement and never exposes arbitrary receip
     for (let n = 0; n < 100 && s.status().generation !== b; n++)
       await new Promise((r) => setTimeout(r, 10));
     assert.equal(s.status().generation, b);
+    assert.deepEqual(s.reloads, ['/style.css', '/theme.css?direct']);
+    assert.ok(plugin.transform('body{}', '/style.css').code.includes(b));
+    await writeFile(
+      file + '.next',
+      JSON.stringify({ schemaVersion: 1, generation: b }),
+    );
+    await rename(file + '.next', file);
+    await new Promise((r) => setTimeout(r, 30));
+    assert.deepEqual(s.reloads, ['/style.css', '/theme.css?direct']);
     const socket = {};
     s.value.ws.emit('connection', socket, {
       headers: { 'x-mergeron-preview-transport': 'PRIVATE_TRANSPORT' },

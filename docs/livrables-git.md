@@ -303,7 +303,10 @@ les fins d'exécution déclenchent une actualisation regroupée. La surveillance
 est libérée en quittant la vue. Une attente d'export peut être relue pendant que
 la vue est active, sans interrogation continue en arrière-plan.
 
-Chaque livrable porte un indicateur : **À jour localement**, **Export en attente**,
+Chaque livrable porte un indicateur, avec le texte vert **Synchronisé localement**
+dans son en-tête lorsque la
+comparaison confirme que tous ses documents et son organisation sont à jour.
+Les autres états restent compacts : **Export en attente**,
 **Synchronisation en cours**, **À examiner**, **Synchronisation indisponible**,
 **Copie en lecture seule** ou **Sans copie Git sélectionnée**. Un import proposé
 et un conflit demandent une revue. Une exclusion de confidentialité n'est jamais

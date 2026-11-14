@@ -235,7 +235,11 @@ sources depuis l’agent. Un HTTP fonctionnel avec un WebSocket bloqué reste en
 échec à l’étape WebSocket ; un style incorrect reste en échec à l’étape CSS.
 
 L’adaptateur émet le marqueur HTML pendant sa transformation et ajoute le marqueur
-de génération au CSS simple réellement transformé. Un hot reload CSS conserve
+de génération au CSS simple réellement transformé. Si le reçu atomique arrive
+après le premier hot reload des fichiers, sa nouvelle génération déclenche une
+nouvelle transformation des feuilles CSS simples déjà chargées. Le marqueur
+reste ainsi lié au CSS effectivement servi, sans simple réécriture du diagnostic.
+Un hot reload CSS conserve
 le document HTML et son marqueur initial. Lorsque le canal HMR, la détection,
 la génération du CSS chargé, sa réponse fraîche et la valeur attendue concordent,
 le résultat confirme le CSS actualisé et précise que le document HTML est

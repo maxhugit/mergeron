@@ -239,6 +239,20 @@ try {
   await page.locator('#monitor').click();
   generation = b;
   await writeFile(path.join(scratch, 'style.css'), '#probe{width:32px}');
+  // Reproduce the transfer order: CSS can finish HMR before the Manager
+  // atomically publishes the receipt. The adapter must refresh its CSS marker.
+  await application.waitForFunction(
+    () => getComputedStyle(document.querySelector('#probe')).width === '32px',
+  );
+  assert.equal(
+    await application.evaluate(() =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue('--mergeron-preview-generation')
+        .trim()
+        .replace(/^['"]|['"]$/g, ''),
+    ),
+    a,
+  );
   await commitReceipt();
   await stage('applied', 'passed');
   await stage('detection', 'passed');

@@ -524,6 +524,7 @@
   "gitDeliverablesPending": "Export pending · review after a restart",
   "gitDeliverablesNotSynchronized": "Not synchronized yet",
   "deliverableGitStatus": "Deliverable synchronization with local Git",
+  "deliverableGitSynchronized": "Synced locally",
   "deliverableGitLocal": "Local Git",
   "deliverableGitCopy": "Deliverables Git copy",
   "deliverableGitChooseCopy": "Choose a copy",
