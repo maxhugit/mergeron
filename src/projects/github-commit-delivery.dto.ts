@@ -1,4 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { deliveryEvidenceReasons } from '../settings/delivery-evidence';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 export class GitCommitWorkflowDto {
   @ApiProperty() id!: number;
   @ApiProperty({ type: String, nullable: true }) name!: string | null;
@@ -21,14 +22,22 @@ export class GitCommitActionsDto {
   @ApiProperty({ type: [GitCommitWorkflowDto] }) items!: GitCommitWorkflowDto[];
 }
 export class GitImageEvidenceDto {
-  @ApiProperty({ enum: ['unverified'] }) state!: 'unverified';
-  @ApiProperty({ enum: ['registry_receipt_required'] })
-  reason!: 'registry_receipt_required';
+  @ApiProperty({ enum: ['unverified', 'verified'] }) state!:
+    | 'unverified'
+    | 'verified';
+  @ApiProperty({ enum: [...deliveryEvidenceReasons] })
+  reason!: (typeof deliveryEvidenceReasons)[number];
+  @ApiPropertyOptional() checkedAt?: number;
+  @ApiPropertyOptional() revision?: string;
+  @ApiPropertyOptional() reference?: string;
+  @ApiPropertyOptional() imageId?: string;
 }
-export class GitDeploymentEvidenceDto {
-  @ApiProperty({ enum: ['unverified'] }) state!: 'unverified';
-  @ApiProperty({ enum: ['runtime_receipt_required'] })
-  reason!: 'runtime_receipt_required';
+export class GitDeploymentEvidenceDto extends GitImageEvidenceDto {
+  @ApiPropertyOptional({ type: String, nullable: true }) observedRevision?:
+    | string
+    | null;
+  @ApiPropertyOptional({ enum: ['development', 'production', 'unknown'] })
+  environment?: 'development' | 'production' | 'unknown';
 }
 export class GitCommitDeliveryDto {
   @ApiProperty() revision!: string;

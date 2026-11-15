@@ -1,3 +1,5 @@
+import { MERGERON_DELIVERY_EVIDENCE } from './delivery-evidence';
+import { MergeronDeliveryEvidenceService } from './mergeron-delivery-evidence.service';
 /** Runtime settings module backed by SQLite. */
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -19,9 +21,15 @@ import { AgentInstructionsService } from './agent-instructions.service';
     ServerReleaseService,
     ManagerStatusService,
     ImageUpdateService,
+    MergeronDeliveryEvidenceService,
+    {
+      provide: MERGERON_DELIVERY_EVIDENCE,
+      useExisting: MergeronDeliveryEvidenceService,
+    },
     RegistryImageIdentityService,
   ],
   exports: [
+    MERGERON_DELIVERY_EVIDENCE,
     SettingsService,
     AgentInstructionsService,
     ServerReleaseService,

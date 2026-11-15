@@ -285,7 +285,34 @@ Aucune relance, annulation ou publication n’est déclenchée par cette lecture
 
 Un workflow vert confirme uniquement son résultat CI. Une publication d’image
 nécessite une preuve du registre liant le SHA au digest immuable ; un déploiement
-nécessite l’observation du digest réellement exécuté dans sa cible. Aucun lecteur
-de reçus générique de ces deux systèmes n’étant configuré pour les projets,
-ces étapes restent **non vérifiées**. Un texte de log ou le nom « deploy » d’un
+nécessite l’observation du digest réellement exécuté dans sa cible. Pour les dépôts autres que Mergeron, aucun lecteur
+de reçus générique de ces deux systèmes n’est configuré ;
+ces étapes restent alors **non vérifiées**. Un texte de log ou le nom « deploy » d’un
 job ne deviennent jamais une preuve de publication ou d’exécution.
+
+### Preuves du registre et du Manager pour Mergeron
+
+Pour une connexion Git visant exactement `maxhugit/mergeron`, un administrateur
+actuellement authentifié obtient aussi deux lectures indépendantes. Le registre
+fixe `ghcr.io/maxhugit/mergeron` est interrogé sur le tag SHA de la chaîne CI ;
+la révision OCI complète doit correspondre au commit, même si le tag utilise
+un SHA court. Les empreintes du manifeste de plateforme et de la configuration
+sont vérifiées avant de publier la référence immuable et sa date d’observation.
+Cette preuve repose sur les métadonnées OCI du registre, pas sur un nom de job.
+
+Le Manager **rattaché à cette instance** observe ensuite l’application gérée.
+Docker doit être joignable et le relevé doit dater de moins d’une minute.
+« Déploiement sain vérifié » exige une révision identique, un conteneur sain,
+un dépôt autorisé et l’identité d’image correspondant à celle du registre.
+Une autre révision observée est affichée séparément. Le lecteur précise DEV ou
+production selon l’inventaire ; il ne cherche pas une autre instance sur le VPS.
+Un conteneur arrêté, non géré, malsain ou sans identité concordante reste non
+vérifié, même si les Actions sont vertes.
+
+Ces lectures ne déclenchent aucun pull, mise à jour, redémarrage ou déploiement.
+L’accès administrateur est revérifié après les attentes. La lecture du registre
+est limitée à huit secondes pour l’ensemble des requêtes, avec un cache borné de
+32 commits pendant cinq minutes ; la date reste celle de l’observation conservée.
+L’indisponibilité du Manager n’efface pas une preuve de registre distincte. Pour
+les applications propres aux projets ou un autre VPS, il faut un lecteur adapté
+à la cible ; aucun reçu ou déploiement n’est déduit des logs ou d’un tag mobile.

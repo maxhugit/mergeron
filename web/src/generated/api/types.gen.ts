@@ -4672,14 +4672,24 @@ export type GitCommitActionsDto = {
 
 
 export type GitImageEvidenceDto = {
-    state: 'unverified';
-    reason: 'registry_receipt_required';
+    state: 'unverified' | 'verified';
+    reason: 'registry_receipt_required' | 'runtime_receipt_required' | 'administrator_required' | 'registry_unavailable' | 'commit_mismatch' | 'manager_unavailable' | 'runtime_not_healthy' | 'different_commit' | 'image_identity_mismatch' | 'verified_registry' | 'verified_manager';
+    checkedAt?: number;
+    revision?: string;
+    reference?: string;
+    imageId?: string;
 };
 
 
 export type GitDeploymentEvidenceDto = {
-    state: 'unverified';
-    reason: 'runtime_receipt_required';
+    state: 'unverified' | 'verified';
+    reason: 'registry_receipt_required' | 'runtime_receipt_required' | 'administrator_required' | 'registry_unavailable' | 'commit_mismatch' | 'manager_unavailable' | 'runtime_not_healthy' | 'different_commit' | 'image_identity_mismatch' | 'verified_registry' | 'verified_manager';
+    checkedAt?: number;
+    revision?: string;
+    reference?: string;
+    imageId?: string;
+    observedRevision?: string | null;
+    environment?: 'development' | 'production' | 'unknown';
 };
 
 

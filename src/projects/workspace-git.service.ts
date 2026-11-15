@@ -1,7 +1,12 @@
 import {
+  MERGERON_DELIVERY_EVIDENCE,
+  type DeliveryEvidenceReader,
+} from '../settings/delivery-evidence';
+import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Inject,
   NotFoundException,
   Optional,
   ForbiddenException,
@@ -116,6 +121,9 @@ export class WorkspaceGitService {
     private readonly copies: WorkspaceCopiesService,
     private readonly resources: WorkspaceResourcesService,
     @Optional() private readonly tracker?: PullRequestTrackerService,
+    @Optional()
+    @Inject(MERGERON_DELIVERY_EVIDENCE)
+    private readonly deliveryEvidence?: DeliveryEvidenceReader,
   ) {}
 
   recordPullRequestCreator(
@@ -997,12 +1005,19 @@ export class WorkspaceGitService {
     check();
     if (commit.sha !== revision)
       throw new ConflictException('GIT_GITHUB_INVALID_RESPONSE');
-    const actions = await this.readActions(
-      projectId,
-      resourceId,
-      { operation: 'workflow_runs', ref: revision, page },
-      check,
-    );
+    const [actions, evidence] = await Promise.all([
+      this.readActions(
+        projectId,
+        resourceId,
+        { operation: 'workflow_runs', ref: revision, page },
+        check,
+      ),
+      repo.owner.toLowerCase() === 'maxhugit' &&
+      repo.repo.toLowerCase() === 'mergeron' &&
+      this.deliveryEvidence
+        ? this.deliveryEvidence.read(revision, check)
+        : Promise.resolve(null),
+    ]);
     check();
     return {
       revision,
@@ -1010,11 +1025,11 @@ export class WorkspaceGitService {
       commitUrl: `https://github.com/${repo.owner}/${repo.repo}/commit/${revision}`,
       inspectedAt: Date.now(),
       actions,
-      image: {
+      image: evidence?.image ?? {
         state: 'unverified' as const,
         reason: 'registry_receipt_required' as const,
       },
-      deployment: {
+      deployment: evidence?.deployment ?? {
         state: 'unverified' as const,
         reason: 'runtime_receipt_required' as const,
       },

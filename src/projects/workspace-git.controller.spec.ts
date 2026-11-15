@@ -234,6 +234,12 @@ it('exports the dated remote observation in the snapshot OpenAPI contract', asyn
         },
       },
     });
+    expect(doc.components!.schemas!.GitImageEvidenceDto).toMatchObject({
+      properties: {
+        state: { enum: ['unverified', 'verified'] },
+        reference: { type: 'string' },
+      },
+    });
     if (process.env.DELIVERY_OPENAPI_EXPORT) {
       const { writeFile } = await import('node:fs/promises');
       await writeFile(

@@ -14,6 +14,24 @@ export function GitCommitDelivery({
   revision: string;
 }) {
   const { t } = useTranslation('workspaces');
+  const reasonLabels = {
+    registry_receipt_required: t('gitEvidenceReasons.registryReceiptRequired'),
+    runtime_receipt_required: t('gitEvidenceReasons.runtimeReceiptRequired'),
+    administrator_required: t('gitEvidenceReasons.administratorRequired'),
+    registry_unavailable: t('gitEvidenceReasons.registryUnavailable'),
+    commit_mismatch: t('gitEvidenceReasons.commitMismatch'),
+    manager_unavailable: t('gitEvidenceReasons.managerUnavailable'),
+    runtime_not_healthy: t('gitEvidenceReasons.runtimeNotHealthy'),
+    different_commit: t('gitEvidenceReasons.differentCommit'),
+    image_identity_mismatch: t('gitEvidenceReasons.imageIdentityMismatch'),
+    verified_registry: t('gitEvidenceReasons.verifiedRegistry'),
+    verified_manager: t('gitEvidenceReasons.verifiedManager'),
+  };
+  const environmentLabels = {
+    development: t('gitEvidenceEnvironment.development'),
+    production: t('gitEvidenceEnvironment.production'),
+    unknown: t('gitEvidenceEnvironment.unknown'),
+  };
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
   const query = useQuery({
@@ -49,7 +67,7 @@ export function GitCommitDelivery({
       onToggle={(e) => setOpen(e.currentTarget.open)}
     >
       <summary className="cursor-pointer">{t('gitCommitDelivery')}</summary>
-      <div className="mt-2 space-y-2 break-all">
+      <div className="mt-2 space-y-2 break-words [overflow-wrap:anywhere]">
         <p>{t('gitCommitDeliveryRevision', { sha: revision })}</p>
         <p className="text-muted-foreground">{t('gitCommitDeliveryProof')}</p>
         {query.isPending && open && (
@@ -117,24 +135,48 @@ export function GitCommitDelivery({
                   {t('gitCommitDeliveryNext')}
                 </Button>
               )}
-
             </div>
             <p className="text-muted-foreground">
-              {t('gitCommitDeliveryImageUnknown')}
+              {data.image.state === 'verified'
+                ? t('gitCommitDeliveryImageVerified', {
+                    reference: data.image.reference ?? '—',
+                    date: data.image.checkedAt
+                      ? new Date(data.image.checkedAt).toLocaleString()
+                      : '—',
+                  })
+                : `${t('gitCommitDeliveryImageUnknown')} ${reasonLabels[data.image.reason] ?? t('gitCommitDeliveryProof')}`}
             </p>
             <p className="text-muted-foreground">
-              {t('gitCommitDeliveryDeploymentUnknown')}
+              {data.deployment.state === 'verified'
+                ? t('gitCommitDeliveryDeploymentVerified', {
+                    reference: data.deployment.reference ?? '—',
+                    environment:
+                      environmentLabels[
+                        data.deployment.environment ?? 'unknown'
+                      ],
+                    date: data.deployment.checkedAt
+                      ? new Date(data.deployment.checkedAt).toLocaleString()
+                      : '—',
+                  })
+                : `${t('gitCommitDeliveryDeploymentUnknown')} ${reasonLabels[data.deployment.reason] ?? t('gitCommitDeliveryProof')}`}
             </p>
+            {data.deployment.observedRevision && (
+              <p>
+                {t('gitCommitDeliveryObservedRevision', {
+                  sha: data.deployment.observedRevision,
+                })}
+              </p>
+            )}
           </>
         )}
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={query.isFetching}
-                onClick={() => void query.refetch()}
-              >
-                {t('gitCommitDeliveryRefresh')}
-              </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={query.isFetching}
+          onClick={() => void query.refetch()}
+        >
+          {t('gitCommitDeliveryRefresh')}
+        </Button>
       </div>
     </details>
   );

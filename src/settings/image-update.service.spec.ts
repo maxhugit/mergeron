@@ -422,3 +422,39 @@ describe('installed image changes', () => {
     expect(service.reads).toHaveLength(0);
   });
 });
+
+it('verifies full OCI commit identity for the fixed short SHA tag, with an aggregate deadline and bounded cache', async () => {
+  class CommitFixture extends ImageUpdateService {
+    reads = vi.fn((_tag: string, signal?: AbortSignal) => {
+      expect(signal).toBeInstanceOf(AbortSignal);
+      return Promise.resolve({ ...image });
+    });
+    protected override fetchImageReference(tag: string, signal?: AbortSignal) {
+      return this.reads(tag, signal);
+    }
+  }
+  const service = new CommitFixture(
+    {} as ServerReleaseService,
+    {} as ManagerStatusService,
+  );
+  const value = await service.publishedCommit(to);
+  expect(value).toMatchObject({
+    revision: to,
+    imageId: newId,
+    reference: `ghcr.io/maxhugit/mergeron@${image.digest}`,
+  });
+  await service.publishedCommit(to);
+  expect(service.reads).toHaveBeenCalledTimes(1);
+  expect(service.reads).toHaveBeenCalledWith(
+    'sha-bbbbbbb',
+    expect.any(AbortSignal),
+  );
+  await expect(service.publishedCommit(from)).rejects.toThrow(
+    'IMAGE_COMMIT_MISMATCH',
+  );
+  const calls = service.reads.mock.calls.length;
+  await expect(
+    service.publishedCommit('https://private.invalid'),
+  ).rejects.toThrow('IMAGE_COMMIT_INVALID');
+  expect(service.reads.mock.calls).toHaveLength(calls);
+});
