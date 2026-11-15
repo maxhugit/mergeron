@@ -468,6 +468,7 @@ export class InternalMcpService implements OnModuleDestroy {
                 'PROJECT_CONNECTION_REQUEST_CONFLICT',
                 'GIT_GITHUB_ACCESS',
                 'GIT_GITHUB_AUTH',
+                'GIT_GITHUB_TOKEN_REQUIRED',
                 'GIT_GITHUB_RATE_LIMIT',
                 'GIT_GITHUB_BUSY',
                 'GIT_GITHUB_TIMEOUT',

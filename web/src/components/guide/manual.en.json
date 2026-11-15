@@ -1890,6 +1890,7 @@
           {
             "title": "Read the remote",
             "paragraphs": [
+              "For a connection to the Mergeron repository, an administrator can also verify the published registry image and its healthy execution by this instance’s Manager. The complete SHA and image identity must match; timestamps and environment are shown. Another revision or missing evidence remains unverified. This read deploys nothing and does not inspect other VPS instances or project applications.",
               "Delivery of this commit in Synchronization verifies the exact SHA on GitHub and shows paginated Actions without an open PR. Status, conclusion and timestamps are separate from image publication and deployment: these remain unverified without a registry receipt and a target observation.",
               "GitHub offers Files, Branches, PR and Merges tabs, in that order. It is not the agent’s local working copy. Use Information in the context menu to inspect connection details.",
               "Retrieval and synchronization are explicit actions. Read the dialog: fetching references, preparing a local branch and integrating commits are different operations."

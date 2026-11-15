@@ -95,6 +95,7 @@ export class ImageUpdateService {
   protected async fetchJson(
     url: string,
     token?: string,
+    signal?: AbortSignal,
   ): Promise<{ value: unknown; raw: string }> {
     const { stdout } = await execute(
       'curl',
@@ -119,7 +120,7 @@ export class ImageUpdateService {
         ...(token ? ['--header', `Authorization: Bearer ${token}`] : []),
         url,
       ],
-      { timeout: 20_000, maxBuffer: 2 * 1024 * 1024 },
+      { timeout: 20_000, maxBuffer: 2 * 1024 * 1024, signal },
     );
     const value: unknown = JSON.parse(stdout);
     return { value, raw: stdout };
@@ -129,15 +130,24 @@ export class ImageUpdateService {
     return arch() === 'x64' ? 'amd64' : arch();
   }
 
-  protected async fetchImage(tag: 'edge' | 'latest'): Promise<PublishedImage> {
+  protected fetchImage(tag: 'edge' | 'latest'): Promise<PublishedImage> {
+    return this.fetchImageReference(tag);
+  }
+
+  protected async fetchImageReference(
+    tag: string,
+    signal?: AbortSignal,
+  ): Promise<PublishedImage> {
     const auth = await this.fetchJson(
       'https://ghcr.io/token?service=ghcr.io&scope=repository:maxhugit/mergeron:pull',
+      undefined,
+      signal,
     );
     const token = object(auth.value).token;
     if (typeof token !== 'string' || !token || /[\r\n]/.test(token))
       throw new Error('Invalid registry token');
     const base = 'https://ghcr.io/v2/maxhugit/mergeron';
-    const top = await this.fetchJson(`${base}/manifests/${tag}`, token);
+    const top = await this.fetchJson(`${base}/manifests/${tag}`, token, signal);
     const digest = `sha256:${createHash('sha256').update(top.raw).digest('hex')}`;
     let manifest = object(top.value);
     if (Array.isArray(manifest.manifests)) {
@@ -159,6 +169,7 @@ export class ImageUpdateService {
       const selected = await this.fetchJson(
         `${base}/manifests/${platformDigest}`,
         token,
+        signal,
       );
       if (
         `sha256:${createHash('sha256').update(selected.raw).digest('hex')}` !==
@@ -170,7 +181,11 @@ export class ImageUpdateService {
     const imageId = object(manifest.config).digest;
     if (typeof imageId !== 'string' || !digestPattern.test(imageId))
       throw new Error('Image identity unavailable');
-    const config = await this.fetchJson(`${base}/blobs/${imageId}`, token);
+    const config = await this.fetchJson(
+      `${base}/blobs/${imageId}`,
+      token,
+      signal,
+    );
     if (
       `sha256:${createHash('sha256').update(config.raw).digest('hex')}` !==
       imageId
@@ -194,6 +209,36 @@ export class ImageUpdateService {
           ? builtAt
           : null,
     };
+  }
+
+  private readonly commitImages = new Map<
+    string,
+    PublishedImage & { checkedAt: number; reference: string }
+  >();
+  /** Fixed registry/tag selected by the server. Full OCI revision prevents short-tag collisions. */
+  async publishedCommit(revision: string) {
+    if (!revisionPattern.test(revision))
+      throw new Error('IMAGE_COMMIT_INVALID');
+    const cached = this.commitImages.get(revision);
+    if (cached && Date.now() - cached.checkedAt < ttl) return cached;
+    const image = await this.fetchImageReference(
+      `sha-${revision.slice(0, 7)}`,
+      AbortSignal.timeout(8000),
+    );
+    if (image.revision !== revision) throw new Error('IMAGE_COMMIT_MISMATCH');
+    const value = {
+      ...image,
+      checkedAt: Date.now(),
+      reference: `${repository}@${image.digest}`,
+    };
+    this.commitImages.delete(revision);
+    this.commitImages.set(revision, value);
+    if (this.commitImages.size > 32)
+      for (const oldest of this.commitImages.keys()) {
+        this.commitImages.delete(oldest);
+        break;
+      }
+    return value;
   }
 
   private async published(tag: 'edge' | 'latest', force: boolean) {

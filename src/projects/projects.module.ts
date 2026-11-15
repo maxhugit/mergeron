@@ -1,3 +1,4 @@
+import { SettingsModule } from '../settings/settings.module';
 import { ProjectAgentLaunchService } from './project-agent-launch.service';
 import { CodexModule } from '../codex/codex.module';
 import { ProjectTaskRuntimeService } from './project-task-runtime.service';
@@ -39,6 +40,7 @@ import { GitDeliverablesService } from './git-deliverables.service';
 
 @Module({
   imports: [
+    SettingsModule,
     CodexModule,
     ActiveFoldersModule,
     AuthModule,

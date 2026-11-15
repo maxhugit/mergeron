@@ -110,3 +110,69 @@ test('rejects cached evidence from a different commit and offers a retry', async
     client.clear();
   }
 });
+
+test.each([390, 1180])(
+  'shows registry and healthy Manager proof separately at %ipx',
+  async (width) => {
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    await page.viewport(width, 900);
+    const data = fixture(1);
+    data.repository = 'maxhugit/mergeron';
+    data.commitUrl = `https://github.com/maxhugit/mergeron/commit/${revision}`;
+    const reference = 'ghcr.io/maxhugit/mergeron@sha256:' + 'c'.repeat(64);
+    data.image = {
+      state: 'verified',
+      reason: 'verified_registry',
+      reference,
+      revision,
+      checkedAt: 1700000000000,
+    };
+    data.deployment = {
+      state: 'verified',
+      reason: 'verified_manager',
+      reference,
+      revision,
+      environment: 'development',
+      checkedAt: 1700000000000,
+    };
+    read.mockResolvedValue({ data });
+    const client = new QueryClient();
+    const view = render(
+      <QueryClientProvider client={client}>
+        <div style={{ width: '100%', padding: 12 }}>
+          <GitCommitDelivery projectId="p" resourceId="c" revision={revision} />
+        </div>
+      </QueryClientProvider>,
+    );
+    try {
+      await page.getByText('Livraison de ce commit', { exact: true }).click();
+      await screen.findByText(/Image publiée vérifiée dans le registre/);
+      await screen.findByText(
+        /Déploiement sain vérifié par le Manager \(DEV\)/,
+      );
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/manager-delivery-${width}.png`,
+      });
+      data.deployment = {
+        state: 'unverified',
+        reason: 'different_commit',
+        observedRevision: 'd'.repeat(40),
+        environment: 'development',
+        checkedAt: 1700000000000,
+      };
+      read.mockResolvedValue({ data: { ...data } });
+      await page
+        .getByRole('button', { name: 'Actualiser les preuves' })
+        .click();
+      await screen.findByText(/Le Manager observe une autre révision/);
+      await screen.findByText(/Révision observée par le Manager/);
+      expect(screen.queryByText(/Déploiement sain vérifié/)).toBeNull();
+      await screen.findByText(/Image publiée vérifiée/);
+    } finally {
+      view.unmount();
+      client.clear();
+    }
+  },
+);

@@ -36,7 +36,7 @@ import {
 } from '../agent-monitors/agent-monitor-schema';
 
 export const INTERNAL_MCP_NAME = 'mergeron_internal';
-export const INTERNAL_MCP_VERSION = '1.16.0';
+export const INTERNAL_MCP_VERSION = '1.17.0';
 export const INTERNAL_MCP_RULES_REVISION = '2026-11-15.1';
 export const INTERNAL_MCP_INSTRUCTIONS =
   `Common rules revision ${INTERNAL_MCP_RULES_REVISION}. These rules apply to all tools and are supplied once at initialization. ` +
@@ -423,7 +423,7 @@ export const INTERNAL_MCP_TOOLS = [
   {
     ...internalMcpIdentity('read_project_git'),
     description:
-      'Inspect GitHub branches/files at immutable ref, PRs and checks (number required). commit_delivery requires ref SHA (optional page), verifies the published commit and lists its CI; image/deployment remain unverified without independent receipts. Actions need no PR: workflow_runs accepts ref/branch/event/status/page; workflow_run requires runId (optional attempt); workflow_jobs requires runId (optional attempt/page); workflow_job_logs requires runId/jobId and returns a bounded tail, truncation and link. Read failed steps/logs yourself. Actions:read permission is required. Local operations require an owned copyId: local_status, local_commits, local_merge_status, local_conflict (path; bounded base/ours/theirs), local_diff (path; working files), local_staged_diff (optional path; frozen index). Staged diffs are 8 KiB pages: retain fingerprint and follow nextCursor as cursor with the same path until null. Omit path and read ALL pages before commit; a scoped or first page is not a complete review. Index or diff changes invalidate cursors. Read-only: no clone/fetch/shell/mutation.',
+      'Inspect GitHub branches/files at immutable ref, PRs and checks (number required). commit_delivery requires ref SHA (optional page), verifies the published commit and lists its CI; Mergeron itself can verify fixed-registry OCI metadata and the attached Manager runtime for a current administrator; other repositories remain unverified without independent readers. Actions need no PR: workflow_runs accepts ref/branch/event/status/page; workflow_run requires runId (optional attempt); workflow_jobs requires runId (optional attempt/page); workflow_job_logs requires runId/jobId and returns a bounded tail, truncation and link. Read failed steps/logs yourself. Actions:read permission is required. Local operations require an owned copyId: local_status, local_commits, local_merge_status, local_conflict (path; bounded base/ours/theirs), local_diff (path; working files), local_staged_diff (optional path; frozen index). Staged diffs are 8 KiB pages: retain fingerprint and follow nextCursor as cursor with the same path until null. Omit path and read ALL pages before commit; a scoped or first page is not a complete review. Index or diff changes invalidate cursors. Read-only: no clone/fetch/shell/mutation.',
     descriptionFr:
       'Consulter GitHub (branches, fichiers, PR, checks, exécutions Actions, jobs et extraits de logs même sans PR ouverte) avec la connexion du projet et inspecter la copie appartenant à cet agent. Aucun secret ni mutation.',
     input: readProjectGitInput,

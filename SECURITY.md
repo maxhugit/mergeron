@@ -218,3 +218,15 @@ HTTP/WS et marque elle-même le transport. La génération compilée, le hash re
 par le vrai client Next et le style calculé doivent concorder. L’absence de
 preuve, un autre bundler ou un protocole inconnu reste non confirmé. Les helpers
 ne sont ni un serveur de production ni une extension des privilèges du runtime.
+
+### Preuves de livraison du Manager
+
+Le lecteur `commit_delivery` ne corrèle le registre et le runtime que pour
+`maxhugit/mergeron`. L’administrateur courant est revérifié avant et après les
+lectures. Les URL GHCR et le tag SHA sont construits côté serveur ; la révision
+OCI complète et les empreintes sont vérifiées. Seuls digest, révision, date et
+environnement sont retournés, sans inventaire privé, nom d’hôte ou configuration.
+Le Manager doit fournir un relevé de moins d’une minute avec Docker joignable,
+et observer une application gérée, autorisée et saine avec l’identité
+d’image exacte du registre. Une CI verte, une étiquette de version ou un reçu
+fourni par l’agent ne suffisent pas. Ce lecteur ne lance aucun pull ou déploiement.

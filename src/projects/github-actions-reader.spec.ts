@@ -1,3 +1,4 @@
+import type { MergeronDeliveryEvidenceService } from '../settings/mergeron-delivery-evidence.service';
 import { afterEach, expect, it, vi } from 'vitest';
 import { readGitHubActions } from './github-actions-reader';
 import { WorkspaceGitService } from './workspace-git.service';
@@ -314,3 +315,59 @@ it('refuses changed commit identity and revoked connection during delivery reads
     fresh.commitDelivery('p', 'c', revision, 1, () => {}),
   ).rejects.toThrow('GIT_STALE');
 });
+
+it.each(['owner/repo', 'maxhugit/mergeron'])(
+  'binds Manager proof only to the configured Mergeron repository: %s',
+  async (repository) => {
+    const resolve = () => ({
+      resource: {
+        enabled: true,
+        type: 'git',
+        address: `https://github.com/${repository}.git`,
+      },
+      secret: { token: 'test-token' },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify(
+              url.includes('/commits/')
+                ? { sha: revision }
+                : { total_count: 1, workflow_runs: [run] },
+            ),
+          ),
+        ),
+      ),
+    );
+    const reader = {
+      read: vi.fn(() =>
+        Promise.resolve({
+          image: { state: 'verified', reason: 'verified_registry' },
+          deployment: { state: 'unverified', reason: 'different_commit' },
+        }),
+      ),
+    };
+    const service = new WorkspaceGitService(
+      {} as WorkspaceCopiesService,
+      { resolveForTransfer: resolve } as unknown as WorkspaceResourcesService,
+      undefined,
+      reader as unknown as MergeronDeliveryEvidenceService,
+    );
+    const result = await service.commitDelivery(
+      'p',
+      'c',
+      revision,
+      1,
+      () => {},
+    );
+    if (repository === 'maxhugit/mergeron') {
+      expect(reader.read).toHaveBeenCalledWith(revision, expect.any(Function));
+      expect(result.image.state).toBe('verified');
+    } else {
+      expect(reader.read).not.toHaveBeenCalled();
+      expect(result.image.state).toBe('unverified');
+    }
+  },
+);

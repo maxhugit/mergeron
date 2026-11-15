@@ -780,3 +780,14 @@ révision `instructionsRevision` consultable dans le catalogue. Les descriptions
 Git et connexions se concentrent sur leurs opérations et prérequis spécifiques.
 Ce regroupement ne modifie aucun droit, approbation, verrou, contrôle de reprise
 ou confirmation destructive côté serveur.
+
+### Preuves de livraison Mergeron (MCP 1.17.0)
+
+`commit_delivery` lit le registre fixe et le Manager rattaché à cette instance
+uniquement pour le dépôt `maxhugit/mergeron` et un administrateur authentifié.
+`image.state="verified"` associe le SHA OCI complet à un digest immuable observé.
+`deployment.state="verified"` exige en plus la même identité d’image réellement
+exécutée, saine et gérée. Les dates et l’environnement sont distincts ; une autre
+révision apparaît dans `observedRevision`. Ne pas annoncer un autre VPS déployé
+à partir du Manager local. Une panne, un refus ou une identité incohérente laisse
+l’étape non vérifiée ; aucune mutation n’est proposée par cette lecture.
