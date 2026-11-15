@@ -186,3 +186,13 @@ paramètre Docker, réseau, de production ou variable d’environnement n’est 
 Voir [Contexte et outils MCP](contexte-et-outils-agents.md),
 [Administration Codex](administration-codex.md) et
 [Développement du dépôt](../CONTRIBUTING.md).
+
+Les dossiers de routes dynamiques Next.js (`[id]`, `[slug]`, `[...slug]`,
+`[[...slug]]`) sont lus comme des noms de dossiers littéraux dans
+`instructionDirectory`, sans expansion de motif. Les restrictions de chemin et
+les protections contre les liens symboliques restent appliquées.
+
+Si aucune sélection explicite n’a été enregistrée et qu’une seule copie prête
+est accessible à l’agent, elle devient automatiquement sa source de consignes.
+Avec plusieurs copies, le choix reste explicite. Retirer volontairement
+l’association conserve le mode sans Git et empêche une réassociation automatique.

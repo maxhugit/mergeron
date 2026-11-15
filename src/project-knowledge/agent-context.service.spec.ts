@@ -150,6 +150,54 @@ describe('agent instruction source and refresh receipts', () => {
     await rm(root, { recursive: true, force: true });
   });
 
+  it('automatically uses the only accessible copy without changing the active folder', async () => {
+    expect(asPerson('admin', () => service.status('agent')).copyId).toBe(
+      'copy',
+    );
+    const snapshot = await asPerson('admin', () =>
+      service.prepare('agent', 'mcp', 'web'),
+    );
+    expect(snapshot.copyId).toBe('copy');
+    expect(snapshot.context).toContain('web/AGENTS.md');
+    expect(asPerson('admin', () => service.supplied(snapshot, 'mcp'))).toBe(
+      true,
+    );
+  });
+
+  it('requires a choice when several accessible copies exist', () => {
+    const copy = database.db.select().from(projectWorkspaceCopies).get()!;
+    const workspace = database.db.select().from(projectWorkspaces).get()!;
+    database.db
+      .insert(projectWorkspaces)
+      .values({
+        ...workspace,
+        id: 'w2',
+        path: root + '/second',
+        primary: false,
+      })
+      .run();
+    database.db
+      .insert(projectWorkspaceCopies)
+      .values({ ...copy, id: 'second-copy', localWorkspaceId: 'w2' })
+      .run();
+    database.db
+      .update(projectAgentThreads)
+      .set({ workspacePath: root + '/second' })
+      .where(eq(projectAgentThreads.threadId, 'agent'))
+      .run();
+    expect(asPerson('admin', () => service.status('agent')).copyId).toBeNull();
+  });
+
+  it('preserves an explicit removal instead of automatically reassociating', async () => {
+    await asPerson('admin', () =>
+      service.associate('agent', { copyId: null, version: 0 }),
+    );
+    expect(asPerson('admin', () => service.status('agent')).copyId).toBeNull();
+    expect(
+      (await asPerson('admin', () => service.prepare('agent', 'mcp'))).copyId,
+    ).toBeNull();
+  });
+
   it('refuses another agent copy even for an administrator in the same project', async () => {
     database.db
       .update(projectGitCopyOwners)
@@ -217,6 +265,7 @@ describe('agent instruction source and refresh receipts', () => {
   });
 
   it('supplies server, profile and project instructions without a Git source, even for a directory request', async () => {
+    database.db.delete(projectGitCopyOwners).run();
     const snapshot = await asPerson('admin', () =>
       service.prepare('agent', 'mcp', 'components'),
     );
@@ -406,7 +455,9 @@ describe('agent instruction source and refresh receipts', () => {
       .insert(projectParticipants)
       .values({ projectId: 'p', personId: 'reader', createdAt: 1 })
       .run();
-    expect(asPerson('reader', () => service.status('agent')).copyId).toBeNull();
+    expect(asPerson('reader', () => service.status('agent')).copyId).toBe(
+      'copy',
+    );
     asPerson('reader', () =>
       service.profile({
         personId: 'reader',
@@ -437,6 +488,38 @@ describe('agent instruction source and refresh receipts', () => {
         .prepare('SELECT count(*) as n FROM agent_context_events')
         .get(),
     ).toEqual({ n: 0 });
+  });
+
+  it.each([
+    'app/carnet/[slug]',
+    'app/espace-membre/annuaire/[id]',
+    'app/docs/[...slug]',
+    'app/docs/[[...slug]]',
+  ])(
+    'reads scoped instructions in literal Next.js route %s',
+    async (directory) => {
+      await mkdir(path.join(root, directory), { recursive: true });
+      await writeFile(path.join(root, 'app/AGENTS.md'), 'Application rules');
+      await writeFile(path.join(root, directory, 'AGENTS.md'), 'Route rules');
+      const files = await readInstructionFiles(root, directory);
+      expect(files.map((file) => file.path)).toEqual([
+        'AGENTS.md',
+        'app/AGENTS.md',
+        `${directory}/AGENTS.md`,
+      ]);
+      expect(files.at(-1)?.text).toBe('Route rules');
+    },
+  );
+
+  it.each([
+    'app/[slug]/../outside',
+    'app/[id]//child',
+    '/app/[id]',
+    'app/[id]\\outside',
+  ])('rejects unsafe bracketed path %s', async (directory) => {
+    await expect(readInstructionFiles(root, directory)).rejects.toThrow(
+      'Invalid',
+    );
   });
 
   it('rejects traversal, symlink and hardlink files, aggregate overflows and missing roots', async () => {

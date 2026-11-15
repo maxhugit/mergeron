@@ -57,7 +57,7 @@ export async function readInstructionFiles(root: string, directory = '') {
     parts.length > 8 ||
     parts.some(
       (part) =>
-        !/^[\p{L}\p{N}_ .-]+$/u.test(part) || ['.', '..'].includes(part),
+        !/^[\p{L}\p{N}_ .[\]-]+$/u.test(part) || ['.', '..'].includes(part),
     )
   )
     throw new BadRequestException('Invalid instruction directory');
@@ -234,6 +234,28 @@ export class AgentContextService {
       .get();
   }
 
+  /** Explicit choices, including removal, take precedence over automatic selection. */
+  private effectiveAssociation(rootId: string, projectId: string) {
+    const saved = this.association(rootId);
+    if (saved) return saved;
+    const candidates = this.db
+      .select()
+      .from(projectWorkspaceCopies)
+      .where(eq(projectWorkspaceCopies.projectId, projectId))
+      .all()
+      .filter((copy) => {
+        try {
+          this.readableCopy(projectId, copy.id, rootId);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+    return candidates.length === 1
+      ? { copyId: candidates[0].id, version: 0 }
+      : undefined;
+  }
+
   private readableCopy(projectId: string, copyId: string, agentId: string) {
     const copy = this.db
       .select()
@@ -352,7 +374,7 @@ export class AgentContextService {
 
   async preview(threadId: string) {
     const { binding, rootId } = this.scope(threadId);
-    const association = this.association(rootId);
+    const association = this.effectiveAssociation(rootId, binding.projectId);
     if (!association?.copyId)
       throw new ConflictException('No Git instruction source associated');
     const snapshot = await this.git(
@@ -362,7 +384,10 @@ export class AgentContextService {
     );
     if (
       this.scope(threadId).binding.projectId !== binding.projectId ||
-      this.association(rootId)?.version !== association.version
+      (this.effectiveAssociation(rootId, binding.projectId)?.version ?? 0) !==
+        association.version ||
+      this.effectiveAssociation(rootId, binding.projectId)?.copyId !==
+        association.copyId
     )
       throw new ConflictException('Instruction association changed');
     return snapshot;
@@ -374,7 +399,7 @@ export class AgentContextService {
     directory?: string,
   ): Promise<AgentContextSnapshot> {
     const { access, binding, rootId } = this.scope(threadId);
-    const association = this.association(rootId);
+    const association = this.effectiveAssociation(rootId, binding.projectId);
     try {
       const platform = this.modules
         .get(AgentInstructionsService, { strict: false })
@@ -420,7 +445,10 @@ export class AgentContextService {
       if (this.scope(threadId).binding.projectId !== binding.projectId)
         throw new ConflictException('Project changed');
       if (
-        (this.association(rootId)?.version ?? 0) !== (association?.version ?? 0)
+        (this.effectiveAssociation(rootId, binding.projectId)?.version ?? 0) !==
+          (association?.version ?? 0) ||
+        this.effectiveAssociation(rootId, binding.projectId)?.copyId !==
+          association?.copyId
       )
         throw new ConflictException('Instruction association changed');
       const snapshot = {
@@ -446,7 +474,10 @@ export class AgentContextService {
       this.readableCopy(binding.projectId, snapshot.copyId, rootId);
     }
     if (
-      (this.association(rootId)?.version ?? 0) !== snapshot.associationVersion
+      (this.effectiveAssociation(rootId, binding.projectId)?.version ?? 0) !==
+        snapshot.associationVersion ||
+      (this.effectiveAssociation(rootId, binding.projectId)?.copyId ?? null) !==
+        snapshot.copyId
     ) {
       this.record(snapshot.threadId, trigger, 'pending', null, []);
       return false;
@@ -527,8 +558,8 @@ export class AgentContextService {
   }
 
   status(threadId: string) {
-    const { rootId } = this.scope(threadId);
-    const association = this.association(rootId);
+    const { rootId, binding } = this.scope(threadId);
+    const association = this.effectiveAssociation(rootId, binding.projectId);
     const events = this.db
       .select()
       .from(agentContextEvents)
