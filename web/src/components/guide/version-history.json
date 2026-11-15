@@ -1,5 +1,25 @@
 [
   {
+    "tag": "v0.8.5",
+    "date": "2026-11-15",
+    "highlights": {
+      "fr": [
+        "Exécution des aperçus fiabilisée : environnement Node et variables cohérents, lancement des serveurs contrôlé et versions réellement observées.",
+        "Ressources des aperçus : profils adaptés, budgets mémoire et stockage temporaire, diagnostics datés et causes d’arrêt mieux expliquées.",
+        "Git : distinction entre état local et état distant confirmé, suivi GitHub Actions par commit et revues paginées vérifiant que le diff reste inchangé.",
+        "Hot reload Next.js avec Webpack vérifié de bout en bout ; diagnostics distincts pour la synchronisation, la compilation et le CSS affiché.",
+        "Livraison Mergeron : lien vérifié entre commit, image publiée au registre et révision exécutée, lorsque le Manager fournit une preuve récente."
+      ],
+      "en": [
+        "More reliable preview execution: consistent Node environment and variables, validated server startup and observed runtime versions.",
+        "Preview resources: suitable presets, memory and temporary storage budgets, dated diagnostics and clearer stop causes.",
+        "Git distinguishes local state from confirmed remote state, tracks GitHub Actions by commit and provides paginated reviews that reject changed diffs.",
+        "End-to-end verification of Next.js hot reload with Webpack, with separate synchronization, compilation and displayed CSS diagnostics.",
+        "Mergeron delivery links commits to verified registry images and running revisions when the Manager supplies recent evidence."
+      ]
+    }
+  },
+  {
     "tag": "v0.8.4",
     "date": "2026-11-14",
     "highlights": {
@@ -277,12 +297,8 @@
     "tag": "v0.5.1",
     "date": "2026-10-29",
     "highlights": {
-      "fr": [
-        "Navigateur isolé pris en charge par le Manager en production."
-      ],
-      "en": [
-        "Manager support for the isolated browser in production."
-      ]
+      "fr": ["Navigateur isolé pris en charge par le Manager en production."],
+      "en": ["Manager support for the isolated browser in production."]
     }
   },
   {
