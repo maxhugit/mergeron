@@ -67,10 +67,7 @@ it.each([
     'SSL certificate problem: unable to get local issuer certificate',
     'GIT_TLS_ERROR',
   ],
-  [
-    'unknown diagnostic with secret-token',
-    'Git inspection failed or exceeded its limit',
-  ],
+  ['unknown diagnostic with secret-token', 'GIT_COMMAND_FAILED'],
 ])('sanitizes Git failure %s', (diagnostic, code) => {
   expect(gitFailureCode(diagnostic)).toBe(code);
 });
@@ -470,6 +467,103 @@ describe('provider adapter', () => {
       accessMode: 'read_only',
       secret: { password: 'private-token' },
     });
+  it.each([
+    {
+      head: 'a'.repeat(40),
+      status: 'identical',
+      mergeBase: 'a'.repeat(40),
+      confirmed: true,
+    },
+    {
+      head: 'b'.repeat(40),
+      status: 'ahead',
+      mergeBase: 'a'.repeat(40),
+      confirmed: true,
+    },
+    {
+      head: 'b'.repeat(40),
+      status: 'diverged',
+      mergeBase: 'c'.repeat(40),
+      confirmed: false,
+    },
+    {
+      head: 'b'.repeat(40),
+      status: 'behind',
+      mergeBase: 'b'.repeat(40),
+      confirmed: false,
+    },
+    {
+      head: 'b'.repeat(40),
+      status: 'ahead',
+      mergeBase: 'c'.repeat(40),
+      confirmed: false,
+    },
+  ])(
+    'reconciles only presence in the exact destination history: $status / $confirmed',
+    async ({ head, status, mergeBase, confirmed }) => {
+      const resource = githubResource();
+      const transport = vi.fn().mockImplementation(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          url.includes('/branches/')
+            ? { commit: { sha: head } }
+            : { status, merge_base_commit: { sha: mergeBase } },
+      }));
+      vi.stubGlobal('fetch', transport);
+      const result = await service.confirmPublishedCommit(
+        'p',
+        resource.id,
+        'feature/target',
+        'a'.repeat(40),
+        () => {},
+      );
+      expect(Boolean(result)).toBe(confirmed);
+      if (confirmed)
+        expect(result).toEqual({
+          sha: 'a'.repeat(40),
+          branch: 'feature/target',
+          remoteHead: head,
+        });
+      expect(transport.mock.calls[0][0]).toBe(
+        'https://api.github.com/repos/example/demo/branches/feature%2Ftarget',
+      );
+      expect(transport).toHaveBeenCalledTimes(head === 'a'.repeat(40) ? 1 : 2);
+    },
+  );
+  it('rejects malformed remote observations and discards a response after authority expires', async () => {
+    const resource = githubResource();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => ({
+        ok: true,
+        json: async () => ({ commit: { sha: 'invalid' } }),
+      })),
+    );
+    await expect(
+      service.confirmPublishedCommit(
+        'p',
+        resource.id,
+        'main',
+        'a'.repeat(40),
+        () => {},
+      ),
+    ).rejects.toThrow('GIT_GITHUB_INVALID_RESPONSE');
+    const check = vi
+      .fn()
+      .mockImplementationOnce(() => {})
+      .mockImplementation(() => {
+        throw Error('revoked');
+      });
+    await expect(
+      service.confirmPublishedCommit(
+        'p',
+        resource.id,
+        'main',
+        'a'.repeat(40),
+        check,
+      ),
+    ).rejects.toThrow('revoked');
+  });
   it('reads a bounded remote graph without touching a local copy, even with inverted dates', async () => {
     const resource = githubResource();
     const parent = 'a'.repeat(40),

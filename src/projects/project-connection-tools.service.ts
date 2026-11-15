@@ -330,7 +330,7 @@ export class ProjectConnectionToolsService {
       const allowed = [
         'connectionId',
         'operation',
-        ...(local ? ['copyId'] : []),
+        'copyId',
         ...(read.operation === 'local_staged_diff'
           ? ['cursor', 'fingerprint']
           : []),
@@ -364,8 +364,8 @@ export class ProjectConnectionToolsService {
         ...(read.operation === 'workflow_job_logs' ? ['jobId'] : []),
       ];
       if (Object.keys(raw).some((k) => !allowed.includes(k)))
-        throw new BadRequestException('Invalid operation fields');
-      if (local) ownCopy(read.copyId);
+        throw new BadRequestException('GIT_INVALID_ARGUMENTS');
+      if (local || read.copyId !== undefined) ownCopy(read.copyId);
       check();
       checkConnection();
       let data: unknown;
@@ -456,7 +456,7 @@ export class ProjectConnectionToolsService {
           break;
       }
       checkConnection();
-      if (local) ownCopy(read.copyId);
+      if (local || read.copyId !== undefined) ownCopy(read.copyId);
       return {
         connectionId: connection.id,
         operation: read.operation,
@@ -573,7 +573,34 @@ export class ProjectConnectionToolsService {
         previous.personId !== access.identity.personId
       )
         throw new ConflictException('PROJECT_CONNECTION_REQUEST_CONFLICT');
-      if (!previous.result) throw new ConflictException('GIT_OUTCOME_UNKNOWN');
+      if (!previous.result) {
+        // Reconciliation is read-only. Never redispatch an uncertain mutation.
+        if (!preparing && publish.operation === 'push') {
+          const confirmed = await this.git.confirmPublishedCommit(
+            projectId,
+            connection.id,
+            publish.expectedBranch,
+            publish.expectedHead,
+            assertWrite,
+          );
+          assertWrite();
+          if (confirmed) {
+            const result = {
+              connectionId: connection.id,
+              operation: publish.operation,
+              data: { ...confirmed, reconciled: true, checkedAt: Date.now() },
+              untrustedContent: true,
+            };
+            this.db
+              .update(projectAgentToolRequests)
+              .set({ result })
+              .where(key)
+              .run();
+            return result;
+          }
+        }
+        throw new ConflictException('GIT_OUTCOME_UNKNOWN');
+      }
       return previous.result;
     }
     const state = await this.git.snapshot(projectId, publish.copyId);

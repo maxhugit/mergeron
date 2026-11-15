@@ -1948,6 +1948,12 @@
         ],
         "sections": [
           {
+            "title": "Uncertain push",
+            "paragraphs": [
+              "If a push remains uncertain, retain the same request ID and parameters. A retry only checks whether the commit is present on the intended GitHub branch, including its history; it does not repeat the push. Without evidence or after access revocation, the outcome remains unconfirmed. Invalid MCP arguments do not establish a GitHub authentication failure."
+            ]
+          },
+          {
             "title": "After push",
             "steps": [
               "Publish the branch and confirm its commits are available on GitHub.",
