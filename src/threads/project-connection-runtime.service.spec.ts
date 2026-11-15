@@ -27,6 +27,7 @@ describe('project MCP connection lifetime', () => {
     let generation = 1;
     const manager = {
       addLifecycleListener: vi.fn(),
+      addListener: vi.fn(),
       getGeneration: () => generation,
       restartControlled: vi.fn(async (beforeReady?: () => void) => {
         await Promise.resolve();
@@ -103,7 +104,6 @@ describe('project MCP connection lifetime', () => {
         { method: 'thread/turns/list' },
       ),
     );
-    expect(() => service.assertFreshLocationPolicy('t', next)).not.toThrow();
     expect((await service.beforeTurn('t', '/copy')).restarted).toBe(false);
     expect(manager.restartControlled).not.toHaveBeenCalled();
     expect(policies.assertExecutionLocation).toHaveBeenCalledWith(
@@ -130,41 +130,322 @@ describe('project MCP connection lifetime', () => {
     expect(manager.restartControlled).not.toHaveBeenCalled();
   });
 
-  it('preserves an unmaterialized conversation instead of restarting away its first-turn state when permissions change', async () => {
-    const { service, manager, policies, codex } = setup();
-    service.record('t', policy);
-    policies.policyForThread.mockResolvedValue({
+  function freshFixture(name: string | null = null) {
+    const fixture = setup();
+    const { service, policies, codex, manager } = fixture;
+    const next = {
       ...policy,
       config: { ...policy.config, default_permissions: 'new-copy-profile' },
+    };
+    service.record('t', policy);
+    policies.policyForThread.mockResolvedValue(next);
+    let persisted = Boolean(name);
+    const notifyClosed = () => {
+      const listener = manager.addListener.mock.calls[0][1] as (
+        note: unknown,
+      ) => void;
+      listener({ method: 'thread/closed', params: { threadId: 't' } });
+    };
+    codex.request.mockImplementation((method: string): Promise<unknown> => {
+      return Promise.resolve().then(() => {
+        if (method === 'thread/turns/list') {
+          if (persisted) return { data: [], nextCursor: null };
+          throw new CodexRpcError(
+            {
+              code: -32600,
+              message:
+                'thread t is not materialized yet; thread/turns/list is unavailable before first user message',
+            },
+            { method },
+          );
+        }
+        if (method === 'thread/read')
+          return {
+            thread: {
+              id: 't',
+              name,
+              historyMode: 'paginated',
+              ephemeral: false,
+              status: { type: 'idle' },
+            },
+          };
+        if (method === 'thread/name/set') {
+          persisted = true;
+          return {};
+        }
+        if (method === 'thread/unsubscribe') {
+          notifyClosed();
+          return { status: 'unsubscribed' };
+        }
+        throw new Error(`Unexpected native method: ${method}`);
+      });
     });
-    codex.request.mockRejectedValue(
-      new CodexRpcError(
-        {
-          code: -32600,
-          message:
-            'thread t is not materialized yet; thread/turns/list is unavailable before first user message',
-        },
-        { method: 'thread/turns/list' },
+    return { ...fixture, next, notifyClosed };
+  }
+
+  it('persists and unloads the same empty agent after Git ownership changes, without restarting other agents', async () => {
+    const { service, manager, codex, next } = freshFixture();
+    expect(await service.beforeTurn('t', '/workspaces/p')).toMatchObject({
+      policy: next,
+      restarted: false,
+      reopened: true,
+      generation: 1,
+    });
+    expect(
+      codex.request.mock.calls.map(([method]) => method as string),
+    ).toEqual([
+      'thread/turns/list',
+      'thread/read',
+      'thread/name/set',
+      'thread/turns/list',
+      'thread/unsubscribe',
+    ]);
+    expect(codex.request).toHaveBeenCalledWith('thread/name/set', {
+      threadId: 't',
+      name: 't',
+    });
+    expect(service.isPlaceholderName('t', 't')).toBe(true);
+    expect(service.isPlaceholderName('t', 'My title')).toBe(false);
+    expect(manager.restartControlled).not.toHaveBeenCalled();
+    // Only the normal, acknowledged native resume may record the new policy.
+    service.record('t', next);
+    expect((await service.beforeTurn('t', '/workspaces/p')).restarted).toBe(
+      false,
+    );
+    expect(codex.request).toHaveBeenCalledTimes(5);
+  });
+
+  it('also refreshes an already named, persisted empty agent without a global restart', async () => {
+    const { service, codex, manager } = freshFixture(
+      'Named before first input',
+    );
+    const native = codex.request.getMockImplementation()! as (
+      method: string,
+    ) => Promise<unknown>;
+    codex.request.mockImplementation((method: string) =>
+      method === 'thread/turns/list'
+        ? Promise.resolve({ data: [], nextCursor: null })
+        : native(method),
+    );
+    expect(await service.beforeTurn('t', '/workspaces/p')).toMatchObject({
+      reopened: true,
+      restarted: false,
+    });
+    expect(manager.restartControlled).not.toHaveBeenCalled();
+  });
+
+  it('retains observed model and read-only settings until the new native profile is recorded', async () => {
+    const { service, next } = freshFixture();
+    Object.assign(service, {
+      settingsObserver: {
+        readSettings: () => ({
+          settings: {
+            model: 'chosen-model',
+            modelProvider: 'local',
+            effort: 'high',
+            approvalPolicy: 'on-request',
+            approvalsReviewer: 'user',
+            serviceTier: null,
+            sandboxPolicy: { type: 'readOnly' },
+          },
+        }),
+      },
+    });
+    await service.beforeTurn('t', '/workspaces/p');
+    expect(service.freshResumeState('t')).toMatchObject({
+      generation: 1,
+      parameters: {
+        model: 'chosen-model',
+        modelProvider: 'local',
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'user',
+        serviceTier: null,
+      },
+      effort: 'high',
+      readOnly: true,
+    });
+    service.record('t', next);
+    expect(service.freshResumeState('t')).toBeUndefined();
+  });
+
+  it('times out without claiming that the native thread was released', async () => {
+    vi.useFakeTimers();
+    try {
+      const { service, codex } = freshFixture();
+      const native = codex.request.getMockImplementation()! as (
+        method: string,
+      ) => Promise<unknown>;
+      codex.request.mockImplementation((method: string) =>
+        method === 'thread/unsubscribe'
+          ? Promise.resolve({ status: 'unsubscribed' })
+          : native(method),
+      );
+      const refresh = service.beforeTurn('t', '/workspaces/p');
+      const rejected = expect(refresh).rejects.toThrow('fermeture');
+      await vi.advanceTimersByTimeAsync(5001);
+      await rejected;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps an existing title when persisting a new conversation', async () => {
+    const { service, codex } = freshFixture('My agent');
+    await service.beforeTurn('t', '/workspaces/p');
+    expect(codex.request).not.toHaveBeenCalledWith(
+      'thread/name/set',
+      expect.anything(),
+    );
+    expect(service.isPlaceholderName('t', 't')).toBe(false);
+  });
+
+  it('deduplicates simultaneous first-turn permission refreshes', async () => {
+    const { service, codex } = freshFixture();
+    await Promise.all([
+      service.beforeTurn('t', '/workspaces/p'),
+      service.beforeTurn('t', '/workspaces/p'),
+    ]);
+    expect(
+      codex.request.mock.calls.filter(
+        ([method]) => method === 'thread/name/set',
       ),
+    ).toHaveLength(1);
+    expect(
+      codex.request.mock.calls.filter(
+        ([method]) => method === 'thread/unsubscribe',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it.each(['active', 'notLoaded'])(
+    'does not unload an agent whose native state is %s',
+    async (status) => {
+      const { service, codex, manager } = freshFixture();
+      const native = codex.request.getMockImplementation()! as (
+        method: string,
+      ) => Promise<unknown>;
+      codex.request.mockImplementation((method: string) =>
+        method === 'thread/read'
+          ? Promise.resolve({
+              thread: {
+                id: 't',
+                historyMode: 'paginated',
+                status: { type: status },
+              },
+            })
+          : native(method),
+      );
+      await expect(service.beforeTurn('t', '/workspaces/p')).rejects.toThrow(
+        'inactif',
+      );
+      expect(codex.request).not.toHaveBeenCalledWith(
+        'thread/unsubscribe',
+        expect.anything(),
+      );
+      expect(manager.restartControlled).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not unload before persistence is confirmed by an empty native history', async () => {
+    const { service, codex, manager } = freshFixture();
+    const native = codex.request.getMockImplementation()! as (
+      method: string,
+    ) => Promise<unknown>;
+    let pageCalls = 0;
+    codex.request.mockImplementation((method: string) =>
+      method === 'thread/turns/list' && ++pageCalls > 1
+        ? Promise.resolve({
+            data: [{ id: 'started-elsewhere' }],
+            nextCursor: null,
+          })
+        : native(method),
     );
     await expect(service.beforeTurn('t', '/workspaces/p')).rejects.toThrow(
-      'premier tour',
+      'démarré',
+    );
+    expect(codex.request).not.toHaveBeenCalledWith(
+      'thread/unsubscribe',
+      expect.anything(),
     );
     expect(manager.restartControlled).not.toHaveBeenCalled();
   });
 
-  it('never approves unknown or changed native integration permissions as a fresh cwd-only change', () => {
-    const { service } = setup();
-    service.record('t', policy);
-    expect(() => service.assertFreshLocationPolicy('unknown', policy)).toThrow(
-      'intégrations',
+  it('preserves the native session when persisting its metadata fails', async () => {
+    const { service, codex, manager } = freshFixture();
+    const native = codex.request.getMockImplementation()! as (
+      method: string,
+    ) => Promise<unknown>;
+    codex.request.mockImplementation((method: string) =>
+      method === 'thread/name/set'
+        ? Promise.reject(new Error('disk unavailable'))
+        : native(method),
     );
-    expect(() =>
-      service.assertFreshLocationPolicy('t', {
-        ...policy,
-        config: { ...policy.config, mcp_servers: { extra: { enabled: true } } },
+    await expect(service.beforeTurn('t', '/workspaces/p')).rejects.toThrow(
+      'disk unavailable',
+    );
+    expect(codex.request).not.toHaveBeenCalledWith(
+      'thread/unsubscribe',
+      expect.anything(),
+    );
+    expect(manager.restartControlled).not.toHaveBeenCalled();
+  });
+
+  it('waits for thread/closed, not just the unsubscribe response', async () => {
+    const { service, codex, notifyClosed } = freshFixture();
+    const native = codex.request.getMockImplementation()! as (
+      method: string,
+    ) => Promise<unknown>;
+    codex.request.mockImplementation((method: string) =>
+      method === 'thread/unsubscribe'
+        ? Promise.resolve({ status: 'unsubscribed' })
+        : native(method),
+    );
+    let resolved = false;
+    const refresh = service.beforeTurn('t', '/workspaces/p').then(() => {
+      resolved = true;
+    });
+    await vi.waitFor(() =>
+      expect(codex.request).toHaveBeenCalledWith('thread/unsubscribe', {
+        threadId: 't',
       }),
-    ).toThrow('intégrations');
+    );
+    expect(resolved).toBe(false);
+    notifyClosed();
+    await refresh;
+    expect(resolved).toBe(true);
+  });
+
+  it('fails closed when native release is refused', async () => {
+    const { service, codex } = freshFixture();
+    const native = codex.request.getMockImplementation()! as (
+      method: string,
+    ) => Promise<unknown>;
+    codex.request.mockImplementation((method: string) =>
+      method === 'thread/unsubscribe'
+        ? Promise.resolve({ status: 'notSubscribed' })
+        : native(method),
+    );
+    await expect(service.beforeTurn('t', '/workspaces/p')).rejects.toThrow(
+      'libération',
+    );
+  });
+
+  it('does not renew an unknown or cross-project fresh session', async () => {
+    const { service, policies, codex } = freshFixture();
+    policies.policyForThread.mockResolvedValue({
+      ...policy,
+      projectId: 'another-project',
+    });
+    await expect(service.beforeTurn('t', '/workspaces/p')).rejects.toThrow(
+      'inconnu',
+    );
+    expect(codex.request).not.toHaveBeenCalledWith(
+      'thread/name/set',
+      expect.anything(),
+    );
+    await expect(
+      service.beforeTurn('unknown', '/workspaces/p'),
+    ).rejects.toThrow('inconnu');
   });
 
   it.each([

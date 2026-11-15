@@ -65,6 +65,62 @@ describe('ThreadHistoryService', () => {
     );
   });
 
+  it('preserves first-turn model and readonly settings while loading the new managed copy profiles', async () => {
+    const connections = {
+      generation: () => 1,
+      assertGeneration: vi.fn(),
+      assertExecutionLocation: vi.fn(),
+      record: vi.fn(),
+      freshResumeState: () => ({
+        parameters: {
+          model: 'chosen-model',
+          modelProvider: 'local',
+          approvalPolicy: 'on-request',
+          approvalsReviewer: 'user',
+          serviceTier: null,
+        },
+        effort: 'high',
+        readOnly: true,
+      }),
+      forResume: vi.fn().mockResolvedValue({
+        config: { permissions: { 'new-read': {} } },
+        readOnly: false,
+        executionCwd: '/copy',
+        copyPermissions: { writable: 'new-write', readOnly: 'new-read' },
+      }),
+    };
+    service = new ThreadHistoryService(
+      mockCodex as never,
+      connections as never,
+    );
+    mockCodex.request.mockResolvedValue({
+      thread: { id: 'fresh', turns: [], historyMode: 'paginated' },
+      activePermissionProfile: { id: 'new-read' },
+      initialTurnsPage: { data: [], nextCursor: null, backwardsCursor: null },
+    });
+    await service.resumeMetadataFirst({
+      threadId: 'fresh',
+      initialTurnsLimit: 1,
+      itemsView: 'summary',
+    });
+    expect(mockCodex.request).toHaveBeenCalledWith(
+      'thread/resume',
+      expect.objectContaining({
+        threadId: 'fresh',
+        model: 'chosen-model',
+        modelProvider: 'local',
+        approvalsReviewer: 'user',
+        permissions: 'new-read',
+        approvalPolicy: boundedApprovalPolicy('on-request'),
+        config: {
+          permissions: { 'new-read': {} },
+          model_reasoning_effort: 'high',
+        },
+      }),
+    );
+    expect(connections.record).toHaveBeenCalledOnce();
+  });
+
   it('applies current project restrictions when resuming a stored conversation', async () => {
     const config = {
       features: { apps: false },
