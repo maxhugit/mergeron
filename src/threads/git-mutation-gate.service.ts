@@ -20,7 +20,7 @@ const contains = (root: string, value: string) =>
   value === root || value.startsWith(root + path.sep);
 const overlaps = (a: string, b: string) => contains(a, b) || contains(b, a);
 
-/** Scoped agent writes require acknowledged native isolation; UI/unknown work stays exclusive. */
+/** Scoped local work requires acknowledged native isolation; unknown work stays exclusive. */
 @Injectable()
 export class GitMutationGateService {
   private writing = false;
@@ -86,7 +86,37 @@ export class GitMutationGateService {
     );
   }
 
-  async mutate<T>(operation: () => Promise<T>): Promise<T> {
+  async mutate<T>(
+    operation: () => Promise<T>,
+    scope?: AgentGitScope,
+  ): Promise<T> {
+    if (scope) {
+      if (!this.manager.getClient())
+        throw new GitGateRefusal('GIT_AGENT_STATE_UNKNOWN');
+      const copyPath = path.resolve(scope.copyPath);
+      if (
+        this.writing ||
+        [...this.copies].some((copy) => overlaps(copy, copyPath)) ||
+        (scope.remoteRef !== undefined &&
+          this.remoteRefs.has(scope.remoteRef)) ||
+        this.inventory
+          .snapshot()
+          .some((id) => !this.protectedFrom(id, copyPath)) ||
+        [...this.starting.values()].some(
+          (id) => !this.protectedFrom(id, copyPath),
+        )
+      )
+        throw new GitGateRefusal('GIT_BUSY');
+      this.copies.add(copyPath);
+      if (scope.remoteRef !== undefined) this.remoteRefs.add(scope.remoteRef);
+      try {
+        return await operation();
+      } finally {
+        this.copies.delete(copyPath);
+        if (scope.remoteRef !== undefined)
+          this.remoteRefs.delete(scope.remoteRef);
+      }
+    }
     if (!this.manager.getClient())
       throw new GitGateRefusal('GIT_AGENT_STATE_UNKNOWN');
     if (

@@ -327,3 +327,17 @@ droit d'administration consultent les informations sans actions de mutation.
 
 **À jour localement ne veut dire ni commité ni publié sur GitHub.** L'index, les
 commits, les push et les protections de branche gardent leurs parcours existants.
+
+## Actions locales et agents actifs
+
+Les actions locales de l’interface, dont remplacer l’état local, verrouillent la
+copie concernée. Un agent qui travaille dans une autre copie ne les bloque pas
+si son isolation native est confirmée et protège la copie cible. Un agent actif
+sur la même copie, une session sans preuve d’isolation ou une opération sur une
+copie imbriquée reste bloquant. Les opérations distantes sans copie conservent
+leur contrôle de concurrence existant.
+
+Les push lancés depuis l’interface suivent aussi le verrou de copie et verrouillent
+la branche distante ciblée : deux copies isolées peuvent publier sur des branches
+différentes, mais deux publications simultanées sur la même branche sont refusées.
+Un push conserve les contrôles du commit examiné, des droits et de non-forçage.

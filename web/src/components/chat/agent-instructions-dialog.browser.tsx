@@ -203,3 +203,45 @@ test.each([390, 1100])(
     });
   },
 );
+
+test.each([390, 1100])(
+  'missing root instructions show a warning without hiding the verified context at %ipx',
+  async (width) => {
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    await page.viewport(width, 950);
+    const source = status.events[0].sources.find(
+      (entry) => entry.kind === 'git',
+    )!;
+    const previous = source.files;
+    source.files = [];
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    try {
+      render(
+        <QueryClientProvider client={client}>
+          <AgentInstructionsDialog
+            threadId="fixture-agent"
+            copies={[]}
+            open
+            onOpenChange={() => {}}
+          />
+        </QueryClientProvider>,
+      );
+      expect(await screen.findByText(/AGENTS.md est absent/)).toBeVisible();
+      expect(screen.getByText('Serveur')).toBeVisible();
+      expect(
+        screen.getByRole('button', { name: 'Vérifier maintenant' }),
+      ).toBeEnabled();
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+      await page.screenshot({
+        path: `../../../.vitest-screenshots/instructions-missing-root-${width}.png`,
+      });
+    } finally {
+      cleanup();
+      client.clear();
+      source.files = previous;
+    }
+  },
+);

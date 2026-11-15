@@ -81,6 +81,14 @@ export function AgentInstructionsDialog({
         copy.sourceConnectionId === resourceId ||
         copy.id === query.data?.copyId),
   );
+  const gitFiles =
+    preview.data?.files.map((file) => file.path) ??
+    last?.sources.find((source) => source.kind === 'git')?.files;
+  const rootMissing =
+    gitFiles !== undefined &&
+    !gitFiles.some((file) =>
+      ['AGENTS.md', 'AGENTS.override.md'].includes(file),
+    );
   const admin = session.data?.role === 'administrator';
   const labels: Record<string, string> = {
     verified: t('contextVerified'),
@@ -152,6 +160,14 @@ export function AgentInstructionsDialog({
               <p className="text-xs text-muted-foreground">
                 {t('contextGitScope')}
               </p>
+              {rootMissing && (
+                <p
+                  role="status"
+                  className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-sm text-amber-700 dark:text-amber-400"
+                >
+                  {t('contextRootMissing')}
+                </p>
+              )}
               {query.data.copyId && (
                 <Button
                   variant="outline"

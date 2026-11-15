@@ -94,7 +94,6 @@ export async function readInstructionFiles(root: string, directory = '') {
       if (next) target = path.join(anchored, next);
     }
     for (const dir of dirs) {
-      let found = false;
       for (const name of ['AGENTS.override.md', 'AGENTS.md']) {
         let handle: Awaited<ReturnType<typeof open>> | undefined;
         try {
@@ -126,7 +125,6 @@ export async function readInstructionFiles(root: string, directory = '') {
               buffer.subarray(0, length),
             ),
           });
-          found = true;
           break;
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
@@ -134,8 +132,6 @@ export async function readInstructionFiles(root: string, directory = '') {
           await handle?.close();
         }
       }
-      if (!dir.relative && !found)
-        throw new ConflictException('Root AGENTS.md is missing');
     }
     if ((await realpath(root)) !== physicalRoot)
       throw new ConflictException('Instruction root moved');
@@ -434,7 +430,17 @@ export class AgentContextService {
           files: git.files.map((file) => file.path),
           commit: git.commit,
         });
-        gitContext = { copyId: association.copyId, ...git };
+        gitContext = {
+          copyId: association.copyId,
+          ...git,
+          warnings: git.files.some((file) =>
+            ['AGENTS.md', 'AGENTS.override.md'].includes(file.path),
+          )
+            ? []
+            : [
+                'Root AGENTS.md is missing. Continue with available platform, profile, project and scoped repository instructions.',
+              ],
+        };
       }
       const context = [
         platform,

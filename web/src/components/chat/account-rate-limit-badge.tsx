@@ -119,7 +119,11 @@ export function AccountRateLimitBadge({
     : secondaryLabel;
 
   return (
-    <div className="flex items-center gap-1">
+    <div
+      className="flex shrink-0 items-center gap-1"
+      aria-label={th('quota')}
+      title={th('quotaHint')}
+    >
       <Badge variant={variant} className="text-xs" title={primaryTitle}>
         <Gauge className="h-3 w-3" />
         {used !== null && <span>{used}%</span>}
@@ -130,7 +134,7 @@ export function AccountRateLimitBadge({
           </span>
         )}
       </Badge>
-      {secondary && (
+      {secondary && !compact && (
         <Badge
           variant={secondary.usedPercent >= 90 ? 'destructive' : 'secondary'}
           className="text-xs"

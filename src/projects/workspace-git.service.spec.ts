@@ -2796,7 +2796,7 @@ describe('confirmed actions', () => {
     });
     await expect(readFile(marker)).rejects.toThrow();
   });
-  it.each([false, true])(
+  it.each([false, true, 'ui-with-other-agent'])(
     'pushes only the reviewed SHA with isolated config and no force (native caller: %s)',
     async (native) => {
       writable();
@@ -2826,7 +2826,15 @@ describe('confirmed actions', () => {
           return original(directory, args, env, timeout);
         },
       );
-      if (native) {
+      if (native === 'ui-with-other-agent') {
+        const copyPath = await service.directory('p', copyId);
+        gate.recordIsolation('other', {
+          writableCopyPath: path.join(root, 'other-copy'),
+          readOnlyRoots: [copyPath],
+        });
+        active = ['other'];
+      }
+      if (native === true) {
         database.db
           .insert(projectAgentThreads)
           .values({
@@ -2848,9 +2856,9 @@ describe('confirmed actions', () => {
           {
             fingerprint: state.fingerprint,
             address: 'https://github.com/example/demo.git',
-            ...(native ? { agentThreadId: 'agent' } : {}),
+            ...(native === true ? { agentThreadId: 'agent' } : {}),
           },
-          native ? { threadId: 'agent', assertActive } : undefined,
+          native === true ? { threadId: 'agent', assertActive } : undefined,
         ),
       );
       expect(pushed).toHaveLength(1);
@@ -2887,7 +2895,7 @@ describe('confirmed actions', () => {
       await git(['reset', '--hard', state.head]);
 
       expect((await service.snapshot('p', copyId)).head).toBe(state.head);
-      if (native) expect(assertActive).toHaveBeenCalledTimes(3);
+      if (native === true) expect(assertActive).toHaveBeenCalledTimes(3);
     },
   );
   it('requires explicit connection credentials before attempting a push', async () => {
@@ -3196,6 +3204,25 @@ describe('confirmed file restoration', () => {
       confirmation: 'RESTORE_LOCAL_FILES',
     };
   };
+  it('restores this copy from the UI while an isolated agent works in another copy', async () => {
+    await writeFile(path.join(cwd, 'README.md'), 'local edit to undo\n');
+    active = ['separate-agent'];
+    const copyPath = await service.directory('p', copyId);
+    gate.recordIsolation('separate-agent', {
+      writableCopyPath: path.join(root, 'separate-copy'),
+      readOnlyRoots: [copyPath],
+    });
+    const input = await reviewFiles();
+    await asPerson(() => actions.restore('p', copyId, input));
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+      'initial\n',
+    );
+    gate.recordIsolation('separate-agent', {
+      writableCopyPath: copyPath,
+      readOnlyRoots: [],
+    });
+    await expect(reviewFiles()).rejects.toThrow('GIT_BUSY');
+  });
   it('allows the owning active agent through the authenticated gate but refuses another owner', async () => {
     database.db
       .insert(projectAgentThreads)

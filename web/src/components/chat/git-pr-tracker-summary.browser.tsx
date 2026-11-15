@@ -28,6 +28,22 @@ vi.mock('@/generated/api', () => ({
   workspaceGitCommitDelivery1: vi.fn(),
   filesAddRoot: async () => ({}),
 }));
+vi.mock('@/lib/agent-context-api', () => ({
+  agentContextKey: (threadId: string) => ['agent-context', threadId],
+  previewGitInstructions: async () => ({
+    files: [],
+    commit: null,
+    revision: 'fixture',
+  }),
+  setAgentInstructionSource: vi.fn(),
+  verifyAgentContext: vi.fn(),
+  getAgentContext: async (threadId: string) => ({
+    threadId,
+    copyId: null,
+    version: 0,
+    events: [],
+  }),
+}));
 vi.mock('@/lib/file-watch-leases', () => ({
   acquireFileWatch: () => () => {},
 }));

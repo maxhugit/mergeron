@@ -141,7 +141,7 @@
             "title": "Se déplacer dans l’application",
             "paragraphs": [
               "Tableau de bord rassemble les projets visibles et les éléments demandant votre attention. La barre latérale donne accès aux ressources de chaque projet.",
-              "Le menu … est identique sur ordinateur, tablette et mobile : état de connexion, quota Codex, actualisation, Paramètres selon les droits, Documentation de Mergeron et formulaires GitHub pour incident ou amélioration. Le commutateur Français / English change rapidement la langue.",
+              "Le menu … est identique sur ordinateur, tablette et mobile : actualisation, Paramètres selon les droits, Documentation de Mergeron et formulaires GitHub pour incident ou amélioration. Le quota du compte Codex est visible en pourcentage dans la barre d’état du bas. Les contrôles Langue et Taille du texte sont alignés sur les autres entrées du menu. Le commutateur Français / English change rapidement la langue.",
               "La taille du texte se règle dans ce menu et reste mémorisée par catégorie d’écran dans votre profil. Le menu Compte conserve les préférences personnelles, les notifications push et la déconnexion.",
               "La cloche à gauche du compte ouvre les notifications. Le guide propose un sommaire, une recherche locale et des liens directs vers chaque article, dont l’Historique des versions."
             ]
@@ -877,7 +877,7 @@
               "Les consignes communes restent dans Paramètres → Codex → Instructions. Mon profil → Préférences des agents permet de définir la langue et les préférences personnelles utilisées pour vos échanges, y compris dans un agent partagé.",
               "Dans la barre de la conversation, ouvrez Consignes de cet agent, juste à gauche du bouton Explorateur. Le bouton reste disponible sans connexion Git ; les consignes générales, du profil et du projet continuent de fonctionner sans source Git associée. Sans choix explicite enregistré, une unique copie Git prête accessible à cet agent est sélectionnée automatiquement. Avec plusieurs copies, choisissez la source. Retirer volontairement l’association conserve le mode sans Git. Seules les copies accessibles à cet agent sont proposées : les copies des autres agents sont exclues et le serveur contrôle aussi cet accès. L’agent conserve son dossier actif. Les connaissances partagées du projet et les fichiers Git restent distincts.",
               "Consignes de cet agent présente l’aperçu Git, les empreintes et le journal. Vérifié ne signifie pas fourni : une vérification manuelle ne transmet rien au modèle. Le serveur relit les sources avant chaque échange ; le parcours MCP fournit le contexte lors de l’appel project_context_read, le parcours sans MCP le transmet directement.",
-              "Après compactage détecté, le contexte est à rétablir au prochain appel MCP ou échange. L’agent demande les fichiers AGENTS spécialisés avec instructionDirectory avant une intervention dans un sous-dossier. Les noms de routes dynamiques Next.js comme [id], [slug] ou [[...slug]] sont pris en charge comme des noms de dossiers littéraux. Une source associée inaccessible bloque le nouvel échange ; rétablissez son accès ou retirez l’association. Les consignes ne modifient jamais les permissions."
+              "Après compactage détecté, le contexte est à rétablir au prochain appel MCP ou échange. L’agent demande les fichiers AGENTS spécialisés avec instructionDirectory avant une intervention dans un sous-dossier. Les noms de routes dynamiques Next.js comme [id], [slug] ou [[...slug]] sont pris en charge comme des noms de dossiers littéraux. Une source associée inaccessible bloque le nouvel échange ; rétablissez son accès ou retirez l’association. L’absence du fichier AGENTS.md racine produit un avertissement et ne bloque pas l’agent : les autres consignes restent fournies. Les consignes ne modifient jamais les permissions."
             ]
           }
         ],
@@ -1921,7 +1921,7 @@
             "title": "Publier une branche",
             "steps": [
               "Vérifiez les commits locaux et la branche choisie.",
-              "Ouvrez l’action Push, contrôlez la destination distante et confirmez.",
+              "Ouvrez l’action Push, contrôlez la destination distante et confirmez. Un agent sur une autre copie isolée ne bloque pas le push ; les publications simultanées sur la même branche distante restent verrouillées.",
               "Attendez le résultat et consultez les diagnostics d’authentification, de réseau ou de refus distant en cas d’échec.",
               "Une fois la publication confirmée, créez éventuellement une pull request séparée."
             ],

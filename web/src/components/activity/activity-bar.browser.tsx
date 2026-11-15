@@ -11,6 +11,11 @@ import { page } from 'vitest/browser';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ActivityProvider } from './activity-provider';
 import { ActivityBar, ActivityButton } from './activity-bar';
+import {
+  accountReadAccountQueryKey,
+  accountReadRateLimitsQueryKey,
+} from '@/generated/api/@tanstack/react-query.gen';
+import { useAccountStore } from '@/stores/account-store';
 import { useConnectionStore } from '@/stores/connection-store';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
@@ -77,6 +82,21 @@ async function setup(width: number) {
   );
   useConnectionStore.setState({ connected: true });
   client = new QueryClient();
+  useAccountStore.setState({ account: null, rateLimits: null });
+  client.setQueryData(accountReadAccountQueryKey(), {
+    account: {
+      type: 'chatgpt',
+      email: 'fixture@example.invalid',
+      planType: 'plus',
+    },
+    requiresOpenaiAuth: false,
+  });
+  client.setQueryData(accountReadRateLimitsQueryKey(), {
+    rateLimits: {
+      primary: { usedPercent: 48, resetsAt: null, windowDurationMins: 300 },
+      secondary: { usedPercent: 7, resetsAt: null, windowDurationMins: 10080 },
+    },
+  });
   const view = render(
     <QueryClientProvider client={client}>
       <ActivityProvider owner="synthetic">
@@ -117,6 +137,9 @@ for (const width of [1280, 820, 390])
     if (width === 390) expect(bar).toBeNull();
     else {
       expect(bar).not.toBeNull();
+      expect(screen.getByText('48%')).toBeVisible();
+      expect(bar!.contains(screen.getByText('48%'))).toBe(true);
+      expect(screen.queryByText('7%')).toBeNull();
       expect(bar!.getBoundingClientRect().height).toBe(
         width === 1280 ? 28 : 32,
       );
