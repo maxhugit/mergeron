@@ -11,6 +11,32 @@ import { page } from 'vitest/browser';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
 import { AgentInstructionsDialog } from './agent-instructions-dialog';
+import { AgentInstructionsButton } from './agent-instructions-button';
+import { WorkspaceControls } from './workspace-controls';
+vi.mock('@/lib/project-locations-api', () => ({
+  getProjectLocations: async () => ({
+    copies: [
+      {
+        id: 'copy',
+        name: 'Copie de cet agent',
+        branch: 'main',
+        sourceType: 'git',
+        sourceEnabled: true,
+        state: 'ready',
+        ownerThreadIds: ['fixture-agent'],
+      },
+      {
+        id: 'foreign',
+        name: 'Copie privée d’un autre agent',
+        branch: 'main',
+        sourceType: 'git',
+        sourceEnabled: true,
+        state: 'ready',
+        ownerThreadIds: ['another-agent'],
+      },
+    ],
+  }),
+}));
 import type { ProjectWorkspaceCopySummary } from '@/lib/projects-api';
 vi.mock('@/lib/platform-session', () => ({
   usePlatformSession: () => ({
@@ -85,6 +111,7 @@ test.each([390, 1100])(
           copies={[
             {
               id: 'copy',
+              ownerThreadIds: ['fixture-agent'],
               name: 'Mergeron — copie locale',
               branch: 'main',
               sourceEnabled: true,
@@ -118,6 +145,61 @@ test.each([390, 1100])(
     expect(screen.getByRole('button', { name: /^Fermer$/ })).toBeVisible();
     await page.screenshot({
       path: `../../../.vitest-screenshots/agent-instructions-${width}.png`,
+    });
+  },
+);
+
+test.each([390, 1100])(
+  'toolbar instructions are before explorer and exclude foreign copies at %ipx',
+  async (width) => {
+    await i18nReady;
+    await i18n.changeLanguage('fr');
+    await page.viewport(width, 900);
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <main className="h-screen bg-background text-foreground">
+          <WorkspaceControls
+            workspace={{ tabs: [], activeId: 'conversation' }}
+            running={false}
+            pending={0}
+            onSelect={() => {}}
+            onClose={() => {}}
+            onExplorer={() => {}}
+            onNewTerminal={() => {}}
+            instructionsControl={
+              <AgentInstructionsButton
+                threadId="fixture-agent"
+                projectId="project"
+              />
+            }
+          />
+          <p className="p-4">Conversation de l’agent</p>
+        </main>
+      </QueryClientProvider>,
+    );
+    const button = screen.getByRole('button', {
+      name: 'Consignes de cet agent',
+    });
+    expect(button.nextElementSibling).toBe(
+      screen.getByRole('button', { name: 'Explorateur' }),
+    );
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/agent-instructions-toolbar-${width}.png`,
+    });
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('option', { name: 'Copie de cet agent · main' }),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('option', { name: /Copie privée/ })).toBeNull();
+    await page.screenshot({
+      path: `../../../.vitest-screenshots/agent-instructions-owned-${width}.png`,
     });
   },
 );

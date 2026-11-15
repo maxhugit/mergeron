@@ -72,6 +72,7 @@ export function AgentInstructionsDialog({
   const last = query.data?.events[0];
   const options = copies.filter(
     (copy) =>
+      copy.ownerThreadIds?.includes(threadId) === true &&
       copy.state === 'ready' &&
       copy.sourceEnabled &&
       copy.sourceType === 'git' &&
@@ -137,7 +138,7 @@ export function AgentInstructionsDialog({
                   <option value="">{t('contextNoSource')}</option>
                   {query.data.copyId &&
                     !options.some((copy) => copy.id === query.data?.copyId) && (
-                      <option value={query.data.copyId}>
+                      <option value={query.data.copyId} disabled>
                         {t('contextUnavailableSource')}
                       </option>
                     )}

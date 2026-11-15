@@ -682,7 +682,7 @@
   "contextError": "Could not complete this operation. Check copy access, the AGENTS.md file and your permissions. For concurrent changes, reload before retrying.",
   "contextRetry": "Reload",
   "contextSaved": "Preferences saved. Effective on the next exchange.",
-  "contextIndependent": "The instruction source is independent of the working directory. It grants no additional access.",
+  "contextIndependent": "Only Git copies accessible to this agent are offered. The instruction source is independent of the working directory and grants no additional access.",
   "contextSource": "Git instruction copy",
   "contextNoSource": "No Git source associated",
   "contextUnavailableSource": "Associated source unavailable",

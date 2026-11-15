@@ -76,7 +76,7 @@ export function DeliverableGitBadge({
     <button
       type="button"
       onClick={() => sync.openReview(itemId)}
-      className={`inline-flex h-7 shrink-0 items-center justify-center rounded text-[11px] hover:bg-muted ${state === 'ready' ? 'max-w-48 gap-1 px-2' : 'w-7'} ${colors(state)}`}
+      className={`inline-flex h-7 shrink-0 items-center justify-center rounded text-[11px] hover:bg-muted w-7 ${colors(state)}`}
       title={t(translationKey(labels[state]))}
     >
       <Icon
@@ -86,11 +86,6 @@ export function DeliverableGitBadge({
       <span className="sr-only">
         {t('deliverableGitStatus')}: {t(translationKey(labels[state]))}
       </span>
-      {state === 'ready' && (
-        <span className="truncate" aria-hidden="true">
-          {t('deliverableGitSynchronized')}
-        </span>
-      )}
     </button>
   );
 }
