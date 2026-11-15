@@ -23,6 +23,7 @@ function verificationBrowser() {
         details: 'Relevés techniques',
         hmrApplied: 'CSS actualisé par hot reload ; document HTML conservé',
         downloadAdapter: 'Télécharger l’intégration Vite',
+        downloadNextAdapter: 'Télécharger l’intégration Next.js (Webpack)',
         chain: 'Chaîne du hot reload',
         source: '1. Fichiers synchronisés',
         detection: '2. Changement détecté par le serveur',
@@ -39,7 +40,7 @@ function verificationBrowser() {
         monitor: 'Surveiller le prochain changement (30 s)',
         monitoring: 'Arrêter la surveillance',
         monitorHelp:
-          'Modifiez puis synchronisez les sources. Le diagnostic observe sans recharger la page. L’intégration Vite utilise le vrai canal HMR ; une génération de transfert seule ne prouve pas sa compilation.',
+          'Modifiez puis synchronisez les sources. Le diagnostic observe sans recharger la page. Les intégrations Vite et Next.js Webpack observent le vrai canal HMR ; une génération de transfert seule ne prouve pas sa compilation.',
         styleMismatch:
           'Le style calculé ne correspond pas à la valeur attendue',
         title: 'Vérification de la preview',
@@ -91,6 +92,7 @@ function verificationBrowser() {
         details: 'Technical observations',
         hmrApplied: 'CSS updated through hot reload; HTML document preserved',
         downloadAdapter: 'Download the Vite integration',
+        downloadNextAdapter: 'Download the Next.js integration (Webpack)',
         chain: 'Hot reload chain',
         source: '1. Synchronized files',
         detection: '2. Change detected by the server',
@@ -107,7 +109,7 @@ function verificationBrowser() {
         monitor: 'Watch the next change (30 s)',
         monitoring: 'Stop watching',
         monitorHelp:
-          'Edit and synchronize the sources. The diagnostic observes without reloading. The Vite integration uses the real HMR channel; a transfer generation alone does not prove compilation.',
+          'Edit and synchronize the sources. The diagnostic observes without reloading. The Vite and Next.js Webpack integrations observe the real HMR channel; a transfer generation alone does not prove compilation.',
         styleMismatch: 'The computed style does not match the expected value',
         title: 'Preview verification',
         check: 'Check without reloading',
@@ -187,7 +189,7 @@ function verificationBrowser() {
         const value = event.data.observation;
         if (
           !value ||
-          value.adapter !== 'vite' ||
+          !['vite', 'next-webpack'].includes(value.adapter) ||
           !['connected', 'bypassed', 'unavailable'].includes(value.websocket) ||
           !['idle', 'updating', 'applied', 'error', 'reloading'].includes(
             value.phase,
@@ -195,7 +197,7 @@ function verificationBrowser() {
         )
           return;
         finish({
-          adapter: 'vite',
+          adapter: value.adapter,
           detectedGeneration:
             typeof value.detectedGeneration === 'string' &&
             uuid.test(value.detectedGeneration)
@@ -577,7 +579,7 @@ function verificationPage(nonce, mergeronUrl) {
       : '') +
     '<h2 data-label="siteAccess"></h2><p id="site-access" role="status"></p></section><button id="check" data-label="check"></button><button id="reload" data-label="reload"></button>' +
     '<details><summary data-label="expected"></summary><label><span data-label="selector"></span><br><input id="selector" placeholder="#example"></label><label><span data-label="property"></span><br><input id="property" placeholder="width"></label><label><span data-label="value"></span><br><input id="expected" placeholder="32px"></label></details>' +
-    '<section aria-labelledby="chain-title"><h2 id="chain-title" data-label="chain"></h2><p data-label="monitorHelp"></p><p><a href="/.__mergeron_preview/vite-plugin.mjs" download="preview-vite-plugin.mjs" data-label="downloadAdapter"></a></p><button id="monitor" data-label="monitor"></button><dl>' +
+    '<section aria-labelledby="chain-title"><h2 id="chain-title" data-label="chain"></h2><p data-label="monitorHelp"></p><p><a href="/.__mergeron_preview/vite-plugin.mjs" download="preview-vite-plugin.mjs" data-label="downloadAdapter"></a> · <a href="/.__mergeron_preview/next-adapter.tar.gz" download="mergeron-next-preview.tar.gz" data-label="downloadNextAdapter"></a></p><button id="monitor" data-label="monitor"></button><dl>' +
     ['source', 'detection', 'socket', 'applied', 'build']
       .map(
         (name) =>

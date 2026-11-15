@@ -966,6 +966,7 @@
           {
             "title": "Open the preview and understand its state",
             "paragraphs": [
+              "Browser verification offers Vite and Next.js Webpack integrations. The optional Next.js adapter is tested with 16.4.6 / React 19.3.1 and plain CSS: receipt detection, compilation, the actual WebSocket through the preview and computed style must agree. Its archive and README require Mergeron authorization. Existing origins are preserved and only the exact Manager hostname is added; Turbopack and uninstrumented styles remain unverified.",
               "The Test environment icon opens a tab beside Conversation. It stays neutral when stopped, turns green after checks confirm normal operation and red on a problem. A starting state is not yet a ready page.",
               "After installation, build and HTTP checks succeed, Open preview opens the real site and Copy URL provides its address. The origin stays the same for this agent after recreation. Reopen from Mergeron to authorize access to the new instance; copying the URL grants no access to another person.",
               "Sources are synchronized from the agent’s copy. Hot reload depends on the project server; dependency changes may require recreation. If installation or build fails, inspect that stage’s logs before retrying."
