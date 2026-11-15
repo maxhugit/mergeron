@@ -202,3 +202,37 @@ it('opens and verifies instructions from the toolbar without any Git copy', asyn
   fireEvent.click(screen.getByRole('button', { name: 'Vérifier maintenant' }));
   await waitFor(() => expect(api.verify).toHaveBeenCalledWith('agent'));
 });
+
+it('shows a non-blocking warning after verifying a repository without root instructions', async () => {
+  await i18nReady;
+  await i18n.changeLanguage('fr');
+  api.verify.mockResolvedValue({
+    threadId: 'agent',
+    copyId: 'copy',
+    version: 2,
+    events: [
+      {
+        id: 'missing',
+        trigger: 'manual',
+        state: 'verified',
+        revision: 'a',
+        sources: [{ kind: 'git', revision: 'a'.repeat(64), files: [] }],
+        createdAt: 1000,
+      },
+    ],
+  });
+  mount(
+    <AgentInstructionsDialog
+      threadId="agent"
+      copies={[copy]}
+      open
+      onOpenChange={() => {}}
+    />,
+  );
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Vérifier maintenant' }),
+  );
+  expect(await screen.findByText(/AGENTS.md est absent/)).toBeVisible();
+  expect(screen.getByText(/Vérifié, pas encore fourni ·/)).toBeVisible();
+  expect(screen.queryByRole('alert')).toBeNull();
+});

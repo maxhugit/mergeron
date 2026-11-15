@@ -1,6 +1,6 @@
 /** A profile preference per viewport class, never a device fingerprint. */
 import { useLayoutEffect } from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { Minus, Plus, Type } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useBreakpoint, type Breakpoint } from '@/hooks/use-breakpoint';
@@ -86,7 +86,8 @@ export function ProfileTextSize({ compact = false }: { compact?: boolean }) {
       aria-busy={save.isPending}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <span>
+        <span className={compact ? 'flex items-center gap-2' : undefined}>
+          {compact && <Type className="size-4 shrink-0" aria-hidden="true" />}
           {t('textSize')}{' '}
           {!compact && (
             <span className="text-xs text-muted-foreground">

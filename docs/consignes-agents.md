@@ -196,3 +196,11 @@ Si aucune sélection explicite n’a été enregistrée et qu’une seule copie 
 est accessible à l’agent, elle devient automatiquement sa source de consignes.
 Avec plusieurs copies, le choix reste explicite. Retirer volontairement
 l’association conserve le mode sans Git et empêche une réassociation automatique.
+
+## Fichier racine absent
+
+L’absence de `AGENTS.md` et `AGENTS.override.md` à la racine affiche un
+avertissement dans les consignes de l’agent, sans bloquer son tour. Les consignes
+serveur, profil, projet et les fichiers de sous-dossiers existants restent fournis.
+Aucun fichier n’est créé automatiquement. Les violations de droits, chemins
+dangereux, liens symboliques et fichiers trop volumineux restent bloquants.

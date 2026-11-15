@@ -238,6 +238,41 @@ describe('concurrent operations on isolated agent copies', () => {
     second.finish();
     await Promise.all([one, two]);
   });
+  it('allows UI work on a separate isolated copy but blocks its active owner and overlapping work', async () => {
+    const { gate, setActive } = setup();
+    await expect(
+      gate.mutate(() => Promise.resolve('ok'), { copyPath: c }),
+    ).resolves.toBe('ok');
+    await expect(
+      gate.mutate(() => Promise.resolve(), { copyPath: a }),
+    ).rejects.toThrow('GIT_BUSY');
+    setActive(['bob']);
+    const pending = deferred();
+    const work = gate.mutate(pending.operation, { copyPath: a });
+    await expect(
+      gate.startTurn(() => Promise.resolve(), 'alice'),
+    ).rejects.toThrow('GIT_BUSY');
+    await expect(
+      gate.mutate(() => Promise.resolve(), { copyPath: `${a}/nested` }),
+    ).rejects.toThrow('GIT_BUSY');
+    await expect(
+      gate.startTurn(() => Promise.resolve(), 'bob'),
+    ).resolves.toBeUndefined();
+    pending.finish();
+    await work;
+    setActive(['unknown']);
+    await expect(
+      gate.mutate(() => Promise.resolve(), { copyPath: a }),
+    ).rejects.toThrow('GIT_BUSY');
+    setActive([]);
+    await expect(
+      gate.mutate(() => Promise.reject(Error('failed')), { copyPath: a }),
+    ).rejects.toThrow('failed');
+    await expect(
+      gate.mutate(() => Promise.resolve('released'), { copyPath: a }),
+    ).resolves.toBe('released');
+  });
+
   it('publishes different branches of the same connection concurrently and serializes a shared remote ref', async () => {
     const { gate } = setup();
     const first = deferred(),

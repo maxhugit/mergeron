@@ -23,6 +23,7 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { useActivity } from './activity-state';
+import { AccountRateLimitBadge } from '@/components/chat/account-rate-limit-badge';
 
 export function ActivityButton() {
   const state = useActivity();
@@ -271,6 +272,7 @@ export function ActivityBar() {
         </span>
       )}
       <span className="flex-1" />
+      <AccountRateLimitBadge compact />
       {data && (
         <>
           <span className="hidden items-center gap-1.5 md:flex">

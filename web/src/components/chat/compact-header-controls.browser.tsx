@@ -140,9 +140,9 @@ for (const width of [390, 800, 1280])
       screen.queryByRole('button', { name: 'Refresh the app' }),
     ).toBeNull();
     await page.getByRole('button', { name: 'More actions' }).click();
-    expect(await screen.findByText('Codex account')).toBeVisible();
-    expect(screen.getByText('42%')).toBeVisible();
-    expect(screen.getByText('7%')).toBeVisible();
+    expect(screen.queryByText('Codex account')).toBeNull();
+    expect(screen.queryByText('42%')).toBeNull();
+    expect(screen.queryByText('7%')).toBeNull();
     expect(
       screen.getByRole('button', { name: 'Mergeron documentation' }),
     ).toBeVisible();
@@ -161,7 +161,7 @@ for (const width of [390, 800, 1280])
     expect(
       screen.queryByText('Saved in your profile for this screen category.'),
     ).toBeNull();
-    expect(screen.getByText('Connected')).toBeVisible();
+    expect(screen.queryByText('Connected')).toBeNull();
     expect(screen.getByRole('button', { name: 'Platform' })).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'Refresh the app' }),
@@ -177,11 +177,12 @@ for (const width of [390, 800, 1280])
       path: `../../../.vitest-screenshots/compact-header-${width}.png`,
     });
     await page.getByRole('button', { name: 'Français', exact: true }).click();
-    expect(await screen.findByText('Compte Codex')).toBeVisible();
+    expect(screen.queryByText('Compte Codex')).toBeNull();
     await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: 'Français' }),
-      ).toHaveAttribute('aria-pressed', 'true'),
+      expect(screen.getByRole('button', { name: 'Français' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
     );
     await page.screenshot({
       path: `../../../.vitest-screenshots/compact-header-${width}-fr.png`,

@@ -3196,6 +3196,25 @@ describe('confirmed file restoration', () => {
       confirmation: 'RESTORE_LOCAL_FILES',
     };
   };
+  it('restores this copy from the UI while an isolated agent works in another copy', async () => {
+    await writeFile(path.join(cwd, 'README.md'), 'local edit to undo\n');
+    active = ['separate-agent'];
+    const copyPath = await service.directory('p', copyId);
+    gate.recordIsolation('separate-agent', {
+      writableCopyPath: path.join(root, 'separate-copy'),
+      readOnlyRoots: [copyPath],
+    });
+    const input = await reviewFiles();
+    await asPerson(() => actions.restore('p', copyId, input));
+    expect(await readFile(path.join(cwd, 'README.md'), 'utf8')).toBe(
+      'initial\n',
+    );
+    gate.recordIsolation('separate-agent', {
+      writableCopyPath: copyPath,
+      readOnlyRoots: [],
+    });
+    await expect(reviewFiles()).rejects.toThrow('GIT_BUSY');
+  });
   it('allows the owning active agent through the authenticated gate but refuses another owner', async () => {
     database.db
       .insert(projectAgentThreads)

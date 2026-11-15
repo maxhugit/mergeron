@@ -1595,7 +1595,10 @@ export class WorkspaceGitActionsService {
         this.git.onWorkingCopyChanged?.(projectId, copyId);
       return result;
     };
-    if (!preparer) return this.gate.mutate(observedOperation);
+    if (!preparer)
+      return this.gate.mutate(observedOperation, {
+        copyPath: await this.git.directory(projectId, copyId),
+      });
     if (body.agentThreadId !== preparer.threadId)
       throw new ForbiddenException('GIT_COPY_OWNED');
     requireThreadAccess(preparer.threadId);

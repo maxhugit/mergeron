@@ -542,7 +542,33 @@ describe('agent instruction source and refresh receipts', () => {
     await writeFile(path.join(root, 'web/AGENTS.md'), 'y'.repeat(20000));
     await expect(readInstructionFiles(root, 'web')).rejects.toThrow('32 KiB');
     await rm(path.join(root, 'AGENTS.md'));
-    await expect(readInstructionFiles(root)).rejects.toThrow('missing');
+    expect(await readInstructionFiles(root)).toEqual([]);
+    await expect(
+      readInstructionFiles(path.join(root, 'missing-root')),
+    ).rejects.toThrow();
+  });
+
+  it('warns without blocking when root instructions are absent and still reads scoped instructions', async () => {
+    await rm(path.join(root, 'AGENTS.md'));
+    expect(
+      (await readInstructionFiles(root, 'web')).map((file) => file.path),
+    ).toEqual(['web/AGENTS.md']);
+    const snapshot = await asPerson('admin', () =>
+      service.prepare('agent', 'mcp', 'web'),
+    );
+    expect(snapshot.context).toContain('Root AGENTS.md is missing. Continue');
+    expect(snapshot.sources.map((source) => source.kind)).toEqual([
+      'server',
+      'profile',
+      'project',
+      'git',
+    ]);
+    expect(asPerson('admin', () => service.supplied(snapshot, 'mcp'))).toBe(
+      true,
+    );
+    await expect(
+      asPerson('admin', () => service.preview('agent')),
+    ).resolves.toMatchObject({ files: [] });
   });
 
   it('rejects invalid UTF-8 instead of silently replacing instruction bytes', async () => {

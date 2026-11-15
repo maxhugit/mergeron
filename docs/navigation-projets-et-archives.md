@@ -74,3 +74,11 @@ Il s’agit des informations du dernier archivage courant, pas d’un journal co
 des cycles d’archivage. Désarchiver efface ces informations ; archiver de nouveau
 enregistre la nouvelle action. Les métadonnées disparaissent avec l’association
 de la conversation ou la suppression du projet, grâce aux règles existantes.
+
+## Menu global et quota
+
+Le menu global conserve les actions, la langue et la taille du texte, avec des
+marges et icônes alignées. La ligne Compte Codex et son état de connexion y sont
+retirés. Le pourcentage de quota utilisé apparaît dans la barre d’état du bas
+lorsqu’elle est affichée et que le quota du compte ChatGPT est disponible.
+Il reste distinct du contexte de conversation et du nombre d’agents actifs.

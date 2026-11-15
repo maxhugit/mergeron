@@ -18,7 +18,6 @@ import {
 } from '@/components/ui/popover';
 import { ReloadApplicationButton } from '@/components/reload-application-button';
 import { ProfileTextSize } from '@/components/account/profile-text-size';
-import { AccountRateLimitBadge } from './account-rate-limit-badge';
 import { McpStatusBadge } from './mcp-status-badge';
 
 /** The same status and global-actions menu on desktop, tablet and mobile. */
@@ -59,25 +58,6 @@ export function CompactHeaderControls({
         style={{ backgroundColor: 'var(--popover)' }}
         className="w-80 max-w-[calc(100vw-1.5rem)] max-h-[calc(100dvh-6rem)] space-y-3 overflow-y-auto p-3"
       >
-        <section
-          className="flex flex-wrap items-center justify-between gap-2 text-xs"
-          aria-label={th('quota')}
-        >
-          <span className="font-medium" title={th('quotaHint')}>
-            {th('account')}
-          </span>
-          <span
-            role="status"
-            className="flex items-center gap-1 whitespace-nowrap"
-          >
-            <span
-              aria-hidden="true"
-              className={`size-1.5 rounded-full ${connected ? 'bg-green-400' : 'bg-destructive'}`}
-            />
-            {connected ? t('connected') : t('disconnected')}
-          </span>
-          <AccountRateLimitBadge showUnavailable compact />
-        </section>
         <McpStatusBadge mode="header" />
         <div className="border-t pt-1">
           <ReloadApplicationButton labelled />
@@ -138,10 +118,12 @@ export function CompactHeaderControls({
             </a>
           </Button>
         </div>
-        <div className="border-t pt-2">
+        <div className="border-t px-3 pt-2">
           <ProfileLanguageSwitch />
         </div>
-        <ProfileTextSize compact />
+        <div className="px-3">
+          <ProfileTextSize compact />
+        </div>
       </PopoverContent>
     </Popover>
   );
