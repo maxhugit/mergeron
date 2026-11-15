@@ -17,6 +17,8 @@ import {
   projectWorkspaceCopies,
   projectLocations,
   personAgentInstructions,
+  projectGitCopyOwners,
+  conversationBranchEdges,
 } from '../database/schema';
 import { accessContext } from '../auth/access-context';
 import { IdentityService } from '../auth/identity.service';
@@ -105,6 +107,15 @@ describe('agent instruction source and refresh receipts', () => {
         updatedAt: 1,
       })
       .run();
+    database.db
+      .insert(projectGitCopyOwners)
+      .values({
+        copyId: 'copy',
+        agentThreadId: 'agent',
+        projectId: 'p',
+        createdAt: 1,
+      })
+      .run();
     identities = new IdentityService(database.db);
     unavailable = false;
     service = new AgentContextService(database.db, {
@@ -137,6 +148,90 @@ describe('agent instruction source and refresh receipts', () => {
   afterEach(async () => {
     database.sqlite.close();
     await rm(root, { recursive: true, force: true });
+  });
+
+  it('refuses another agent copy even for an administrator in the same project', async () => {
+    database.db
+      .update(projectGitCopyOwners)
+      .set({ agentThreadId: 'another-agent' })
+      .run();
+    await expect(
+      asPerson('admin', () =>
+        service.associate('agent', { copyId: 'copy', version: 0 }),
+      ),
+    ).rejects.toThrow('Instruction source unavailable');
+    expect(asPerson('admin', () => service.status('agent')).copyId).toBeNull();
+  });
+
+  it('revokes previews, scoped reads and supply when ownership is lost', async () => {
+    await asPerson('admin', () =>
+      service.associate('agent', { copyId: 'copy', version: 0 }),
+    );
+    const snapshot = await asPerson('admin', () =>
+      service.prepare('agent', 'mcp'),
+    );
+    database.db.delete(projectGitCopyOwners).run();
+    await expect(
+      asPerson('admin', () => service.preview('agent')),
+    ).rejects.toThrow('Instruction source unavailable');
+    await expect(
+      asPerson('admin', () => service.prepare('agent', 'mcp', 'web')),
+    ).rejects.toThrow('Instruction source unavailable');
+    expect(() =>
+      asPerson('admin', () => service.supplied(snapshot, 'mcp')),
+    ).toThrow('Instruction source unavailable');
+  });
+
+  it('shares the root agent authorized copy with edited-message variants', async () => {
+    database.db
+      .insert(projectAgentThreads)
+      .values({
+        threadId: 'variant',
+        projectId: 'p',
+        workspacePath: '/another-folder',
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .run();
+    database.db
+      .insert(conversationBranchEdges)
+      .values({
+        childThreadId: 'variant',
+        parentThreadId: 'agent',
+        treeRootThreadId: 'agent',
+        forkBeforeTurnId: 'turn',
+        commonPrefixTurnId: 'prefix',
+        inheritedTurnIds: '[]',
+        createdAt: 1,
+      })
+      .run();
+    await asPerson('admin', () =>
+      service.associate('variant', { copyId: 'copy', version: 0 }),
+    );
+    expect(
+      (await asPerson('admin', () => service.preview('variant'))).files[0].text,
+    ).toBe('Repository rules');
+    expect(asPerson('admin', () => service.status('agent')).copyId).toBe(
+      'copy',
+    );
+  });
+
+  it('supplies server, profile and project instructions without a Git source, even for a directory request', async () => {
+    const snapshot = await asPerson('admin', () =>
+      service.prepare('agent', 'mcp', 'components'),
+    );
+    expect(snapshot.copyId).toBeNull();
+    expect(snapshot.sources.map((source) => source.kind)).toEqual([
+      'server',
+      'profile',
+      'project',
+    ]);
+    expect(snapshot.context).toContain('Server rules');
+    expect(snapshot.context).toContain('Project rules');
+    expect(snapshot.context).toContain('null\n</agent_git_instructions>');
+    expect(asPerson('admin', () => service.supplied(snapshot, 'mcp'))).toBe(
+      true,
+    );
   });
 
   it('associates independently of cwd, refuses stale writes and reads scoped files on demand', async () => {

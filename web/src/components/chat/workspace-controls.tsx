@@ -1,6 +1,6 @@
 import { translationKey } from '@/locales/translation-key';
 /** Desktop tabs and phone view chooser share descriptors and explicit activation. */
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import {
   FileCode,
   FolderTree,
@@ -28,6 +28,7 @@ interface Props {
   onSelect: (id: string) => void;
   onClose: (tab: WorkspaceTab) => void;
   onExplorer: () => void;
+  instructionsControl?: ReactNode;
   onBrowser?: () => void;
   onPreview?: () => void;
   localBrowserStatus?: string;
@@ -44,6 +45,7 @@ export function WorkspaceControls({
   onSelect,
   onClose,
   onExplorer,
+  instructionsControl,
   onBrowser,
   onPreview,
   localBrowserStatus = 'disconnected',
@@ -315,6 +317,7 @@ export function WorkspaceControls({
           <FlaskConical className="h-4 w-4" />
         </button>
       )}
+      {instructionsControl}
       <button
         type="button"
         className="h-10 shrink-0 px-3 hover:bg-accent"

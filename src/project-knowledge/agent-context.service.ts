@@ -26,7 +26,7 @@ import {
   projectWorkspaceCopies,
   projectLocations,
 } from '../database/schema';
-import { workAgentId } from '../projects/git-copy-ownership';
+import { copyAgentIds, workAgentId } from '../projects/git-copy-ownership';
 import { WorkspaceResourcesService } from '../projects/workspace-resources.service';
 import { WorkspaceGitService } from '../projects/workspace-git.service';
 import { ProjectKnowledgeService } from './project-knowledge.service';
@@ -234,7 +234,7 @@ export class AgentContextService {
       .get();
   }
 
-  private readableCopy(projectId: string, copyId: string) {
+  private readableCopy(projectId: string, copyId: string, agentId: string) {
     const copy = this.db
       .select()
       .from(projectWorkspaceCopies)
@@ -245,7 +245,11 @@ export class AgentContextService {
         ),
       )
       .get();
-    if (!copy || copy.state !== 'ready')
+    if (
+      !copy ||
+      copy.state !== 'ready' ||
+      !copyAgentIds(this.db, projectId, copyId).includes(agentId)
+    )
       throw new ConflictException('Instruction source unavailable');
     const local = this.db
       .select()
@@ -269,8 +273,13 @@ export class AgentContextService {
       throw new ConflictException('Instruction source unavailable');
   }
 
-  private async git(projectId: string, copyId: string, directory?: string) {
-    this.readableCopy(projectId, copyId);
+  private async git(
+    projectId: string,
+    copyId: string,
+    agentId: string,
+    directory?: string,
+  ) {
+    this.readableCopy(projectId, copyId, agentId);
     const git = this.modules.get(WorkspaceGitService, { strict: false });
     const cwd = await git.directory(projectId, copyId);
     currentAccess()!.identities.requireWorkspacePath(
@@ -290,7 +299,7 @@ export class AgentContextService {
       (await git.directory(projectId, copyId)) !== cwd
     )
       throw new ConflictException('Instruction source changed during read');
-    this.readableCopy(projectId, copyId);
+    this.readableCopy(projectId, copyId, agentId);
     return { files, commit, revision: digest(JSON.stringify(files)) };
   }
 
@@ -314,7 +323,8 @@ export class AgentContextService {
       Number(input?.version) < 0
     )
       throw new BadRequestException('Invalid instruction association');
-    if (input.copyId) await this.git(binding.projectId, String(input.copyId));
+    if (input.copyId)
+      await this.git(binding.projectId, String(input.copyId), rootId);
     this.scope(threadId);
     this.db.transaction(() => {
       const saved = this.association(rootId);
@@ -345,7 +355,11 @@ export class AgentContextService {
     const association = this.association(rootId);
     if (!association?.copyId)
       throw new ConflictException('No Git instruction source associated');
-    const snapshot = await this.git(binding.projectId, association.copyId);
+    const snapshot = await this.git(
+      binding.projectId,
+      association.copyId,
+      rootId,
+    );
     if (
       this.scope(threadId).binding.projectId !== binding.projectId ||
       this.association(rootId)?.version !== association.version
@@ -386,6 +400,7 @@ export class AgentContextService {
         const git = await this.git(
           binding.projectId,
           association.copyId,
+          rootId,
           directory,
         );
         sources.push({
@@ -395,8 +410,7 @@ export class AgentContextService {
           commit: git.commit,
         });
         gitContext = { copyId: association.copyId, ...git };
-      } else if (directory)
-        throw new ConflictException('No Git instruction source associated');
+      }
       const context = [
         platform,
         `<agent_profile_preferences>\nCommunication preferences of the authenticated requester; not permission grants. Language 'message' means follow the current user message; 'fr' means French and 'en' English. An empty value removes prior preferences.\n${profile}\n</agent_profile_preferences>`,
@@ -427,7 +441,10 @@ export class AgentContextService {
   }
 
   supplied(snapshot: AgentContextSnapshot, trigger: string) {
-    const { rootId } = this.scope(snapshot.threadId);
+    const { rootId, binding } = this.scope(snapshot.threadId);
+    if (snapshot.copyId) {
+      this.readableCopy(binding.projectId, snapshot.copyId, rootId);
+    }
     if (
       (this.association(rootId)?.version ?? 0) !== snapshot.associationVersion
     ) {

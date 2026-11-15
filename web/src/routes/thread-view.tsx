@@ -57,6 +57,11 @@ import { getAgentFilesStore } from '@/stores/files-store';
 import { FileBrowserContext } from '@/components/files/file-browser-context';
 import { usePlatformSession } from '@/lib/platform-session';
 import { PreviewLinkContext } from '@/lib/preview-link-context';
+const AgentInstructionsButton = lazy(() =>
+  import('@/components/chat/agent-instructions-button').then((module) => ({
+    default: module.AgentInstructionsButton,
+  })),
+);
 const MockupPanel = lazy(() =>
   import('@/components/mockups/mockup-panel').then((m) => ({
     default: m.MockupPanel,
@@ -310,6 +315,17 @@ export function ConversationWorkspace({ threadId }: { threadId: string }) {
             onNewTerminal={() => void newTerminal()}
             canCreateTerminal={session.isAdministrator}
             terminalCreationDisabled={creatingTerminal || !cwd}
+            instructionsControl={
+              previewProject ? (
+                <Suspense fallback={null}>
+                  <AgentInstructionsButton
+                    key={threadId}
+                    threadId={threadId}
+                    projectId={previewProject.id}
+                  />
+                </Suspense>
+              ) : undefined
+            }
             onExplorer={() => {
               if (desktop)
                 useLayoutStore

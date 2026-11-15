@@ -9,8 +9,18 @@ it('does not leave inactive close controls in the roving tab order or activate v
   const onSelect = vi.fn(),
     onClose = vi.fn();
   const tabs = [
-    { id: 'file:/first.ts', kind: 'file' as const, path: '/first.ts', documentId: 'document:first' },
-    { id: 'file:/second.ts', kind: 'file' as const, path: '/second.ts', documentId: 'document:second' },
+    {
+      id: 'file:/first.ts',
+      kind: 'file' as const,
+      path: '/first.ts',
+      documentId: 'document:first',
+    },
+    {
+      id: 'file:/second.ts',
+      kind: 'file' as const,
+      path: '/second.ts',
+      documentId: 'document:second',
+    },
   ];
   render(
     <WorkspaceControls
@@ -34,4 +44,23 @@ it('does not leave inactive close controls in the roving tab order or activate v
   expect(onSelect).not.toHaveBeenCalled();
   fireEvent.keyDown(document.activeElement!, { key: 'Delete' });
   expect(onClose).toHaveBeenCalledWith(tabs[1]);
+});
+
+it('places instruction access immediately before the explorer button', () => {
+  render(
+    <WorkspaceControls
+      workspace={{ tabs: [], activeId: 'conversation' }}
+      running={false}
+      pending={0}
+      onSelect={vi.fn()}
+      onClose={vi.fn()}
+      onExplorer={vi.fn()}
+      onNewTerminal={vi.fn()}
+      instructionsControl={<button>Read agent instructions</button>}
+    />,
+  );
+  expect(
+    screen.getByRole('button', { name: 'Read agent instructions' })
+      .nextElementSibling,
+  ).toBe(screen.getByRole('button', { name: 'Explorer' }));
 });

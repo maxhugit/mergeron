@@ -127,16 +127,6 @@ export function WorkspaceGitPanel(props: Props) {
     <>
       {props.agentThreadId && (
         <>
-          <div className="shrink-0 border-b px-2 py-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="max-w-full text-xs"
-              onClick={() => setInstructions({})}
-            >
-              {t('contextTitle')}
-            </Button>
-          </div>
           <AgentInstructionsDialog
             key={`${props.projectId}:${props.agentThreadId}`}
             threadId={props.agentThreadId}

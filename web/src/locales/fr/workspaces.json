@@ -682,7 +682,7 @@
   "contextError": "Impossible de terminer cette opération. Vérifiez l’accès à la copie, la présence du fichier AGENTS.md et vos permissions. En cas de modification simultanée, rechargez avant de réessayer.",
   "contextRetry": "Recharger",
   "contextSaved": "Préférences enregistrées. Prise en compte au prochain échange.",
-  "contextIndependent": "La source de consignes est indépendante du dossier de travail. Elle ne donne aucun droit supplémentaire.",
+  "contextIndependent": "Seules les copies Git accessibles à cet agent sont proposées. La source de consignes est indépendante du dossier de travail et ne donne aucun droit supplémentaire.",
   "contextSource": "Copie Git de consignes",
   "contextNoSource": "Aucune source Git associée",
   "contextUnavailableSource": "Source associée indisponible",

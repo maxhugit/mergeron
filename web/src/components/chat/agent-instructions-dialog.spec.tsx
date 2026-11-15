@@ -9,6 +9,10 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import i18n, { i18nReady } from '@/i18n';
 import { AgentInstructionsDialog } from './agent-instructions-dialog';
+import { AgentInstructionsButton } from './agent-instructions-button';
+vi.mock('@/lib/project-locations-api', () => ({
+  getProjectLocations: async () => ({ copies: [] }),
+}));
 import { ProfileAgentInstructions } from '@/components/account/profile-agent-instructions';
 import type { AgentContextStatus } from '@/lib/agent-context-api';
 import type { ProjectWorkspaceCopySummary } from '@/lib/projects-api';
@@ -52,6 +56,7 @@ afterEach(() => {
 });
 const copy = {
   id: 'copy',
+  ownerThreadIds: ['agent'],
   sourceResourceId: 'source',
   name: 'Mergeron — copie locale',
   branch: 'main',
@@ -129,6 +134,30 @@ it('associates an explicit copy with its expected version and keeps verification
   fireEvent.click(screen.getByRole('button', { name: 'Vérifier maintenant' }));
   await waitFor(() => expect(api.verify).toHaveBeenCalledWith('agent'));
 });
+it('lists only ready Git copies accessible to this agent, excluding foreign and unknown ownership', async () => {
+  await i18nReady;
+  await i18n.changeLanguage('fr');
+  mount(
+    <AgentInstructionsDialog
+      threadId="agent"
+      copies={[
+        copy,
+        { ...copy, id: 'foreign', ownerThreadIds: ['another-agent'] },
+        { ...copy, id: 'unknown', ownerThreadIds: undefined },
+        { ...copy, id: 'disabled', sourceEnabled: false },
+      ]}
+      open
+      onOpenChange={() => {}}
+    />,
+  );
+  await screen.findByRole('combobox', { name: 'Copie Git de consignes' });
+  const options = screen.getAllByRole('option');
+  expect(options.map((option) => (option as HTMLOptionElement).value)).toEqual([
+    '',
+    'copy',
+  ]);
+});
+
 it('saves preferences for the authenticated profile with language and allows cancellation', async () => {
   await i18nReady;
   await i18n.changeLanguage('fr');
@@ -153,4 +182,23 @@ it('saves preferences for the authenticated profile with language and allows can
       expect.anything(),
     ),
   );
+});
+
+it('opens and verifies instructions from the toolbar without any Git copy', async () => {
+  await i18nReady;
+  await i18n.changeLanguage('fr');
+  api.verify.mockResolvedValue({
+    threadId: 'agent',
+    copyId: null,
+    version: 2,
+    events: [],
+  });
+  mount(<AgentInstructionsButton threadId="agent" projectId="project" />);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Consignes de cet agent' }),
+  );
+  expect(await screen.findByRole('dialog')).toBeVisible();
+  expect(await screen.findAllByRole('option')).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Vérifier maintenant' }));
+  await waitFor(() => expect(api.verify).toHaveBeenCalledWith('agent'));
 });

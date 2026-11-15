@@ -9,7 +9,7 @@ Les consignes sont assemblées pour un agent sans déplacer son dossier de trava
 | Serveur | Paramètres → Codex → Instructions                                                                  | Consignes communes de l’instance                               |
 | Profil  | Mon profil → Préférences des agents                                                                | Préférences de l’utilisateur authentifié qui demande l’échange |
 | Projet  | Paramètres du projet → Gestion des agents → Connaissances partagées                                | AGENTS.md, CONNAISSANCES.md et DECISIONS.md propres au projet  |
-| Git     | Sidebar droite de l’agent → Sources → menu du dépôt → Utiliser une copie comme source de consignes | Une copie Git locale explicitement associée à cet agent        |
+| Git     | Barre de la conversation → Consignes de cet agent, à gauche d’Explorateur | Une copie Git locale explicitement associée à cet agent        |
 
 Le profil permet de choisir une langue de réponse et un texte personnel, limité
 à 8 000 octets UTF-8. Ce texte est fourni à l’agent : ne pas y placer de secrets.
@@ -18,16 +18,27 @@ tour authentifié, pas celles du dernier visiteur. Les automatismes utilisent le
 identité d’exécution existante ; une identité de service sans profil n’emprunte
 pas les préférences d’une personne.
 
+Le bouton **Consignes de cet agent** est disponible dans la barre de la
+conversation, immédiatement à gauche d’**Explorateur**, même lorsque la sidebar
+est fermée ou que le projet n’a pas de connexion Git. L’entrée dédiée sous
+l’onglet Sources est supprimée. Sans source Git associée, une demande MCP avec
+un dossier relatif restitue quand même les consignes serveur, profil et projet,
+avec une section Git vide ; aucun fichier de ce dossier n’est lu implicitement.
+
 La fenêtre **Consignes de cet agent** propose les copies Git prêtes et accessibles
-du projet, leur association ou son retrait, l’aperçu du fichier racine actuel,
+via l’agent courant, leur association ou son retrait, l’aperçu du fichier racine actuel,
 les sources et leurs empreintes, et le journal. La modification d’association est
 réservée à l’administrateur, comme les paramètres d’exécution des agents. Une
 version attendue empêche d’écraser silencieusement une modification simultanée.
 Les variantes d’un même agent partagent l’association de leur agent racine.
 
-Une copie servant aux consignes peut différer de celle réservée à l’agent pour
-les écritures. Cette association ne réserve pas la copie, n’accorde aucun droit
-sur ses fichiers et ne modifie pas la référence de travail.
+La liste exclut les copies des autres agents et celles dont la propriété est
+inconnue. Le serveur contrôle aussi cette propriété à l’association, à la lecture
+et avant la remise du contexte. Une ancienne association devenue inaccessible
+reste signalée comme indisponible et peut être retirée, sans exposer la copie.
+Les variantes d’un même agent conservent l’accès à la copie de leur agent racine.
+Le dossier actif peut rester un livrable : cette association ne déplace aucun
+fichier et n’accorde aucun droit supplémentaire.
 
 ## Deux AGENTS.md distincts
 
