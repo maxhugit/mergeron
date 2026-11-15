@@ -319,12 +319,25 @@ agents actifs et bloque de nouveaux tours pendant la publication ; seul le tour
 appelant est admis pour cette opération distante. Les mutations Git locales de
 l’interface gardent leur barrière stricte habituelle.
 
+Les lectures distantes acceptent un `copyId` facultatif s’il appartient à cet
+agent et à cette connexion ; il ne change jamais le dépôt interrogé. Les lectures
+locales exigent toujours cette copie. Un champ incompatible avec l’opération
+renvoie `GIT_INVALID_ARGUMENTS` (ou `INVALID_TOOL_ARGUMENTS` pour un schéma
+invalide), sans conclure à un défaut d’authentification GitHub. Un échec Git
+non classé renvoie `GIT_COMMAND_FAILED`, sans diagnostic brut ni secret.
+
 Une connexion désactivée ou révoquée ne peut pas être utilisée. La simulation
 d’identité ne peut pas publier. Une capacité affichée n’autorise jamais à
 publier sans demande humaine. Un résultat incertain (`GIT_OUTCOME_UNKNOWN`)
 peut correspondre à une publication réussie : consulter le distant, ne pas
 relancer automatiquement sous un nouveau `requestId`. Une relance identique
-renvoie le résultat confirmé, sans second envoi. Les demandes et publications
+renvoie le résultat confirmé, sans second envoi. Si un push enregistré n’a pas
+de résultat, la relance identique effectue uniquement une lecture GitHub bornée
+à 15 secondes : branche de destination et, si nécessaire, comparaison avec
+son historique. Elle confirme seulement un SHA identique ou ancêtre vérifié de
+la branche observée, puis conserve ce reçu avec `reconciled: true`. Une autre
+branche, un historique divergent, une révocation ou une lecture indisponible
+ne permettent aucun nouveau push et ne transforment pas l’incertitude en succès. Les demandes et publications
 sont enregistrées dans le journal du projet.
 
 Le catalogue natif et **Paramètres → MCP interne** décrivent les mêmes outils

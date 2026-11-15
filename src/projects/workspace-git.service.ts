@@ -853,9 +853,7 @@ export class WorkspaceGitService {
       const hash = window ? createHash('sha256') : undefined;
       let failed = false;
       let diagnostics = '';
-      const fail = (
-        message = 'Git inspection failed or exceeded its limit',
-      ) => {
+      const fail = (message = 'GIT_COMMAND_FAILED') => {
         if (failed) return;
         failed = true;
         clearTimeout(timer);
@@ -1097,6 +1095,54 @@ export class WorkspaceGitService {
         ) ?? { creator: null, agents: [] },
       })),
     };
+  }
+
+  /** Confirm presence on the exact destination branch, including later descendants. */
+  async confirmPublishedCommit(
+    projectId: string,
+    resourceId: string,
+    branch: string,
+    revision: string,
+    assertActive: () => void,
+  ): Promise<{ sha: string; branch: string; remoteHead: string } | null> {
+    assertActive();
+    const repo = this.github(projectId, resourceId);
+    if (!repo?.token) return null;
+    const unchanged = () => {
+      assertActive();
+      const current = this.github(projectId, resourceId);
+      if (
+        !current ||
+        current.owner !== repo.owner ||
+        current.repo !== repo.repo ||
+        current.token !== repo.token
+      )
+        throw new ConflictException('PROJECT_CONNECTION_UNAVAILABLE');
+    };
+    const signal = AbortSignal.timeout(15000);
+    const remote = await this.githubGet<{ commit: { sha: string } }>(
+      repo,
+      `branches/${encodeURIComponent(branch)}`,
+      false,
+      { signal },
+    );
+    unchanged();
+    const head = remote.commit?.sha;
+    if (typeof head !== 'string' || !/^[a-f0-9]{40,64}$/.test(head))
+      throw new ConflictException('GIT_GITHUB_INVALID_RESPONSE');
+    if (head !== revision) {
+      const comparison = await this.githubGet<{
+        status: string;
+        merge_base_commit: { sha: string };
+      }>(repo, `compare/${revision}...${head}`, false, { signal });
+      unchanged();
+      if (
+        !['ahead', 'identical'].includes(comparison.status) ||
+        comparison.merge_base_commit?.sha !== revision
+      )
+        return null;
+    }
+    return { sha: revision, branch, remoteHead: head };
   }
 
   async remoteBranches(projectId: string, resourceId: string) {
@@ -1560,7 +1606,7 @@ export function gitFailureCode(diagnostics: string): string {
     return 'GIT_NETWORK_UNAVAILABLE';
   if (/SSL certificate problem|certificate verify failed/i.test(diagnostics))
     return 'GIT_TLS_ERROR';
-  return 'Git inspection failed or exceeded its limit';
+  return 'GIT_COMMAND_FAILED';
 }
 
 export async function readGitIndex(cwd: string): Promise<Buffer> {

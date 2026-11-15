@@ -644,6 +644,23 @@ describe('native internal MCP over HTTP', () => {
     expect(cloneConnection).toHaveBeenCalledTimes(1);
   });
 
+  it('reports invalid Git operation fields without claiming a GitHub access refusal', async () => {
+    const { client } = await connect();
+    activate();
+    const result = await client.callTool({
+      name: 'project_git_read',
+      arguments: {
+        connectionId: gitConnectionId,
+        operation: 'branches',
+        number: 12,
+      },
+    });
+    expect(result.isError).toBe(true);
+    const content = result.content as Array<{ type: string; text: string }>;
+    expect(JSON.parse(content[0].text)).toMatchObject({
+      code: 'GIT_INVALID_ARGUMENTS',
+    });
+  });
   it('exposes controlled preparation as a real MCP object schema and validates operation fields server-side', async () => {
     const { client } = await connect();
     const args = {

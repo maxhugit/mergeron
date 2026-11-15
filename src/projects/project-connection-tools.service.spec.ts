@@ -52,6 +52,7 @@ describe('project connection agent tools', () => {
     checks: vi.fn(),
     readActions: vi.fn(),
     commitDelivery: vi.fn(),
+    confirmPublishedCommit: vi.fn(),
     diff: vi.fn(),
     stagedDiff: vi.fn(),
     stagedDiffPage: vi.fn(),
@@ -197,6 +198,7 @@ describe('project connection agent tools', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    git.confirmPublishedCommit.mockResolvedValue(null);
     database = createTestDatabase();
     database.db
       .insert(people)
@@ -852,7 +854,7 @@ describe('project connection agent tools', () => {
         ref: 'a'.repeat(40),
         runId: 1,
       }),
-    ).rejects.toThrow('Invalid operation fields');
+    ).rejects.toThrow('GIT_INVALID_ARGUMENTS');
   });
 
   it.each([
@@ -886,7 +888,7 @@ describe('project connection agent tools', () => {
       expect(git.pullRequests).not.toHaveBeenCalled();
       await expect(
         call({ tool: 'read_project_git', connectionId, ...query, number: 10 }),
-      ).rejects.toThrow('Invalid operation fields');
+      ).rejects.toThrow('GIT_INVALID_ARGUMENTS');
       await expect(
         call({
           tool: 'read_project_git',
@@ -894,7 +896,7 @@ describe('project connection agent tools', () => {
           ...query,
           copyId: 'other',
         }),
-      ).rejects.toThrow('Invalid operation fields');
+      ).rejects.toThrow('GIT_COPY_OWNED');
       await expect(
         call({
           tool: 'read_project_git',
@@ -1028,6 +1030,65 @@ describe('project connection agent tools', () => {
       },
     );
     await expect(call(publish())).rejects.toThrow('GIT_READ_ONLY');
+  });
+  it('accepts an owned copy on remote reads but rejects a foreign one before contacting GitHub', async () => {
+    git.remoteBranches.mockResolvedValue({ items: [] });
+    await call({
+      tool: 'read_project_git',
+      operation: 'branches',
+      connectionId,
+      copyId: 'own',
+    });
+    expect(git.remoteBranches).toHaveBeenCalledOnce();
+    await expect(
+      call({
+        tool: 'read_project_git',
+        operation: 'branches',
+        connectionId,
+        copyId: 'foreign',
+      }),
+    ).rejects.toThrow('GIT_COPY_OWNED');
+    expect(git.remoteBranches).toHaveBeenCalledOnce();
+  });
+  it('reconciles an uncertain push only from a confirmed destination observation, without redispatch', async () => {
+    actions.push.mockRejectedValueOnce(new Error('GIT_OUTCOME_UNKNOWN'));
+    await expect(call(publish())).rejects.toThrow('GIT_OUTCOME_UNKNOWN');
+    git.confirmPublishedCommit.mockResolvedValue({
+      sha: state.head,
+      branch: state.branch,
+      remoteHead: 'c'.repeat(40),
+    });
+    const result = await call(publish());
+    expect(result).toMatchObject({
+      data: { sha: state.head, branch: state.branch, reconciled: true },
+    });
+    expect(git.confirmPublishedCommit).toHaveBeenCalledWith(
+      'p',
+      connectionId,
+      state.branch,
+      state.head,
+      expect.any(Function),
+    );
+    expect(actions.push).toHaveBeenCalledTimes(1);
+    expect(await call(publish())).toEqual(result);
+    expect(git.confirmPublishedCommit).toHaveBeenCalledTimes(1);
+  });
+  it('never stores reconciliation after authority is revoked during the read', async () => {
+    actions.push.mockRejectedValueOnce(new Error('GIT_OUTCOME_UNKNOWN'));
+    await expect(call(publish())).rejects.toThrow('GIT_OUTCOME_UNKNOWN');
+    git.confirmPublishedCommit.mockImplementation(async () => {
+      database.db
+        .update(projectConnections)
+        .set({ enabled: false })
+        .where(eq(projectConnections.id, connectionId))
+        .run();
+      return { sha: state.head, branch: state.branch, remoteHead: state.head };
+    });
+    await expect(call(publish())).rejects.toThrow('GIT_READ_ONLY');
+    expect(
+      database.db.select().from(projectAgentToolRequests).all()[0].result,
+    ).toBeNull();
+    expect(actions.push).toHaveBeenCalledTimes(1);
   });
   it('does not automatically repeat an uncertain remote outcome', async () => {
     actions.push.mockRejectedValueOnce(new Error('GIT_OUTCOME_UNKNOWN'));

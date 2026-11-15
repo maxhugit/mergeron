@@ -1949,6 +1949,12 @@
         ],
         "sections": [
           {
+            "title": "Envoi incertain",
+            "paragraphs": [
+              "Si un push reste indéterminé, gardez le même identifiant et les mêmes paramètres. Une reprise vérifie uniquement la présence du commit sur la branche GitHub visée, y compris dans son historique ; elle ne répète pas l’envoi. Sans preuve ou après révocation, le résultat reste non confirmé. Une erreur de paramètres MCP ne prouve pas un refus d’authentification GitHub."
+            ]
+          },
+          {
             "title": "Après le push",
             "steps": [
               "Publiez la branche et vérifiez que ses commits sont disponibles sur GitHub.",

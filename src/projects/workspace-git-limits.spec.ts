@@ -82,7 +82,7 @@ describe('Git command limits', () => {
       return process;
     });
     await expect(service.git('/copy', ['status'])).rejects.toThrow(
-      'Git inspection failed or exceeded its limit',
+      'GIT_COMMAND_FAILED',
     );
     expect(vi.getTimerCount()).toBe(0);
   });

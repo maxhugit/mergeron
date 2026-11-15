@@ -1,10 +1,12 @@
 import {
   Injectable,
+  BadRequestException,
   OnModuleDestroy,
   ServiceUnavailableException,
   Optional,
   Logger,
 } from '@nestjs/common';
+import { ZodError } from 'zod';
 import { LocalAgentsService } from '../local-agents/local-agents.service';
 import {
   createServer,
@@ -481,6 +483,8 @@ export class InternalMcpService implements OnModuleDestroy {
                 'GIT_GITHUB_LOGS_HOST_UNSUPPORTED',
                 'GIT_OUTPUT_LIMIT_EXCEEDED',
                 'GIT_COMMAND_TIMEOUT',
+                'GIT_COMMAND_FAILED',
+                'GIT_INVALID_ARGUMENTS',
                 'GIT_STALE',
                 'GIT_REVIEW_CURSOR_INVALID',
                 'GIT_WORKTREE_DIRTY',
@@ -522,7 +526,10 @@ export class InternalMcpService implements OnModuleDestroy {
                 'PREVIEW_DISABLED',
               ].includes(error.message)
                 ? error.message
-                : 'ACCESS_DENIED_OR_CREATION_UNCONFIRMED';
+                : error instanceof BadRequestException ||
+                    error instanceof ZodError
+                  ? 'INVALID_TOOL_ARGUMENTS'
+                  : 'ACCESS_DENIED_OR_CREATION_UNCONFIRMED';
             return {
               isError: true,
               content: [
@@ -531,14 +538,19 @@ export class InternalMcpService implements OnModuleDestroy {
                   text: JSON.stringify({
                     code,
                     message:
-                      (code === 'NO_ACTIVE_TURN'
-                        ? 'The authenticated turn context is expired or unavailable. Fresh user input or a human approval can renew the same active turn; a stopped or completed turn requires a new turn. Do not retry automatically. '
-                        : code === 'GIT_GITHUB_ACCESS' ||
-                            code === 'GIT_GITHUB_AUTH'
-                          ? 'GitHub refused this repository read. Check the configured connection and repository Actions read permission; this does not mean no workflows exist. '
-                          : code.startsWith('GIT_GITHUB_LOGS_')
-                            ? 'Job logs are unavailable, expired, incomplete or blocked by the approved storage/proxy scope. Do not infer success or bypass network restrictions. Use the observed job link and report this limit. '
-                            : 'Check project access, configured connection, manager, arguments and observed state. ') +
+                      (code === 'INVALID_TOOL_ARGUMENTS' ||
+                      code === 'GIT_INVALID_ARGUMENTS'
+                        ? 'Invalid parameters for this operation. Consult its tool schema and operation-specific fields; this error does not establish a GitHub authentication failure. '
+                        : code === 'GIT_COMMAND_FAILED'
+                          ? 'The Git command failed. Credentials and raw diagnostics are withheld; inspect local and remote state before any retry. '
+                          : code === 'NO_ACTIVE_TURN'
+                            ? 'The authenticated turn context is expired or unavailable. Fresh user input or a human approval can renew the same active turn; a stopped or completed turn requires a new turn. Do not retry automatically. '
+                            : code === 'GIT_GITHUB_ACCESS' ||
+                                code === 'GIT_GITHUB_AUTH'
+                              ? 'GitHub refused this repository read. Check the configured connection and repository Actions read permission; this does not mean no workflows exist. '
+                              : code.startsWith('GIT_GITHUB_LOGS_')
+                                ? 'Job logs are unavailable, expired, incomplete or blocked by the approved storage/proxy scope. Do not infer success or bypass network restrictions. Use the observed job link and report this limit. '
+                                : 'Check project access, configured connection, manager, arguments and observed state. ') +
                       'For any mutation retry keep the SAME requestId and payload. An unknown outcome may already have succeeded: inspect local and remote state and never automatically retry with a new ID. Never claim unconfirmed success.',
                   }),
                 },
