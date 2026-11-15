@@ -247,7 +247,7 @@ it('prevents duplicate requests and shows busy errors without closing confirmati
   await waitFor(() => expect(posts()).toHaveLength(1));
   await act(async () => reject(new Error('GIT_BUSY')));
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Attendez la fin des agents actifs',
+    'Cette copie est utilisée par un agent actif',
   );
   expect(screen.getByRole('dialog')).toBeInTheDocument();
 });

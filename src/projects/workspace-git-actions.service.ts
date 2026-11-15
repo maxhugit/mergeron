@@ -1624,7 +1624,21 @@ export class WorkspaceGitActionsService {
     operation: () => Promise<T>,
   ) {
     const { projectId, copyId } = copy;
-    if (!publisher) return this.gate.mutate(operation);
+    if (!publisher) {
+      const { cwd, source, branch } = await this.copyState(
+        projectId,
+        copyId,
+        body.fingerprint,
+      );
+      return this.gate.mutate(operation, {
+        copyPath: cwd,
+        remoteRef: JSON.stringify(
+          copy.pullRequestNumber === undefined
+            ? [source.resource.address, branch]
+            : [source.resource.address, 'pull_request', copy.pullRequestNumber],
+        ),
+      });
+    }
     if (body.agentThreadId !== publisher.threadId)
       throw new ForbiddenException('GIT_COPY_OWNED');
     requireThreadAccess(publisher.threadId);

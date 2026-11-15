@@ -1921,7 +1921,7 @@
             "title": "Publier une branche",
             "steps": [
               "Vérifiez les commits locaux et la branche choisie.",
-              "Ouvrez l’action Push, contrôlez la destination distante et confirmez.",
+              "Ouvrez l’action Push, contrôlez la destination distante et confirmez. Un agent sur une autre copie isolée ne bloque pas le push ; les publications simultanées sur la même branche distante restent verrouillées.",
               "Attendez le résultat et consultez les diagnostics d’authentification, de réseau ou de refus distant en cas d’échec.",
               "Une fois la publication confirmée, créez éventuellement une pull request séparée."
             ],

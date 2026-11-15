@@ -336,3 +336,8 @@ si son isolation native est confirmée et protège la copie cible. Un agent acti
 sur la même copie, une session sans preuve d’isolation ou une opération sur une
 copie imbriquée reste bloquant. Les opérations distantes sans copie conservent
 leur contrôle de concurrence existant.
+
+Les push lancés depuis l’interface suivent aussi le verrou de copie et verrouillent
+la branche distante ciblée : deux copies isolées peuvent publier sur des branches
+différentes, mais deux publications simultanées sur la même branche sont refusées.
+Un push conserve les contrôles du commit examiné, des droits et de non-forçage.

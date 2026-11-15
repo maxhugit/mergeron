@@ -2796,7 +2796,7 @@ describe('confirmed actions', () => {
     });
     await expect(readFile(marker)).rejects.toThrow();
   });
-  it.each([false, true])(
+  it.each([false, true, 'ui-with-other-agent'])(
     'pushes only the reviewed SHA with isolated config and no force (native caller: %s)',
     async (native) => {
       writable();
@@ -2826,7 +2826,15 @@ describe('confirmed actions', () => {
           return original(directory, args, env, timeout);
         },
       );
-      if (native) {
+      if (native === 'ui-with-other-agent') {
+        const copyPath = await service.directory('p', copyId);
+        gate.recordIsolation('other', {
+          writableCopyPath: path.join(root, 'other-copy'),
+          readOnlyRoots: [copyPath],
+        });
+        active = ['other'];
+      }
+      if (native === true) {
         database.db
           .insert(projectAgentThreads)
           .values({
@@ -2848,9 +2856,9 @@ describe('confirmed actions', () => {
           {
             fingerprint: state.fingerprint,
             address: 'https://github.com/example/demo.git',
-            ...(native ? { agentThreadId: 'agent' } : {}),
+            ...(native === true ? { agentThreadId: 'agent' } : {}),
           },
-          native ? { threadId: 'agent', assertActive } : undefined,
+          native === true ? { threadId: 'agent', assertActive } : undefined,
         ),
       );
       expect(pushed).toHaveLength(1);
@@ -2887,7 +2895,7 @@ describe('confirmed actions', () => {
       await git(['reset', '--hard', state.head]);
 
       expect((await service.snapshot('p', copyId)).head).toBe(state.head);
-      if (native) expect(assertActive).toHaveBeenCalledTimes(3);
+      if (native === true) expect(assertActive).toHaveBeenCalledTimes(3);
     },
   );
   it('requires explicit connection credentials before attempting a push', async () => {
