@@ -1,9 +1,10 @@
-import type { MergeronDeliveryEvidenceService } from '../settings/mergeron-delivery-evidence.service';
+import { Test } from '@nestjs/testing';
+import { MERGERON_DELIVERY_EVIDENCE } from '../settings/delivery-evidence';
 import { afterEach, expect, it, vi } from 'vitest';
 import { readGitHubActions } from './github-actions-reader';
 import { WorkspaceGitService } from './workspace-git.service';
-import type { WorkspaceResourcesService } from './workspace-resources.service';
-import type { WorkspaceCopiesService } from './workspace-copies.service';
+import { WorkspaceResourcesService } from './workspace-resources.service';
+import { WorkspaceCopiesService } from './workspace-copies.service';
 
 const revision = 'a'.repeat(40);
 const runId = 43398956550;
@@ -349,12 +350,18 @@ it.each(['owner/repo', 'maxhugit/mergeron'])(
         }),
       ),
     };
-    const service = new WorkspaceGitService(
-      {} as WorkspaceCopiesService,
-      { resolveForTransfer: resolve } as unknown as WorkspaceResourcesService,
-      undefined,
-      reader as unknown as MergeronDeliveryEvidenceService,
-    );
+    const module = await Test.createTestingModule({
+      providers: [
+        WorkspaceGitService,
+        { provide: WorkspaceCopiesService, useValue: {} },
+        {
+          provide: WorkspaceResourcesService,
+          useValue: { resolveForTransfer: resolve },
+        },
+        { provide: MERGERON_DELIVERY_EVIDENCE, useValue: reader },
+      ],
+    }).compile();
+    const service = module.get(WorkspaceGitService);
     const result = await service.commitDelivery(
       'p',
       'c',
@@ -369,5 +376,6 @@ it.each(['owner/repo', 'maxhugit/mergeron'])(
       expect(reader.read).not.toHaveBeenCalled();
       expect(result.image.state).toBe('unverified');
     }
+    await module.close();
   },
 );

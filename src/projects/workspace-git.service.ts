@@ -1,8 +1,12 @@
-import { MergeronDeliveryEvidenceService } from '../settings/mergeron-delivery-evidence.service';
+import {
+  MERGERON_DELIVERY_EVIDENCE,
+  type DeliveryEvidenceReader,
+} from '../settings/delivery-evidence';
 import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Inject,
   NotFoundException,
   Optional,
   ForbiddenException,
@@ -118,7 +122,8 @@ export class WorkspaceGitService {
     private readonly resources: WorkspaceResourcesService,
     @Optional() private readonly tracker?: PullRequestTrackerService,
     @Optional()
-    private readonly deliveryEvidence?: MergeronDeliveryEvidenceService,
+    @Inject(MERGERON_DELIVERY_EVIDENCE)
+    private readonly deliveryEvidence?: DeliveryEvidenceReader,
   ) {}
 
   recordPullRequestCreator(

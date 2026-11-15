@@ -1,3 +1,4 @@
+export const MERGERON_DELIVERY_EVIDENCE = 'MERGERON_DELIVERY_EVIDENCE';
 export const deliveryEvidenceReasons = [
   'registry_receipt_required',
   'runtime_receipt_required',
@@ -20,4 +21,11 @@ export interface DeliveryEvidence {
   imageId?: string;
   observedRevision?: string | null;
   environment?: 'development' | 'production' | 'unknown';
+}
+
+export interface DeliveryEvidenceReader {
+  read(
+    revision: string,
+    assertActive: () => void,
+  ): Promise<{ image: DeliveryEvidence; deployment: DeliveryEvidence }>;
 }
