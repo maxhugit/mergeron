@@ -625,6 +625,70 @@ describe('ThreadsService', () => {
     expect(mockBranches.setActiveMember).toHaveBeenCalledWith('t1', 't1');
   });
 
+  it.each([
+    { active: '/assigned', legacy: '/legacy', expected: '/assigned' },
+    { active: null, legacy: '/legacy', expected: '/legacy' },
+  ])(
+    'reopens the effective folder $expected',
+    async ({ active, legacy, expected }) => {
+      mockActiveFolders.resolveAgent.mockReturnValue(active);
+      mockWorkspaceOverrides.get.mockReturnValue(legacy);
+      mockResumeRegistry.ensureOpened.mockResolvedValue({
+        mode: 'writable',
+        thread: { id: 't1', cwd: '/previous', forkedFromId: null },
+        cwd: '/previous',
+      });
+      mockCodex.request.mockImplementation((method: string) =>
+        Promise.resolve(
+          method === 'thread/turns/list'
+            ? { data: [], nextCursor: null }
+            : { thread: { id: 't1', cwd: expected }, cwd: expected },
+        ),
+      );
+
+      const opened = await service.resumeThread('t1', { recordActive: false });
+
+      expect(opened.cwd).toBe(expected);
+      expect(mockCodex.request).toHaveBeenCalledWith(
+        'thread/resume',
+        expect.objectContaining({ threadId: 't1', cwd: expected }),
+      );
+      expect(mockWorkspaceOverrides.setMany).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not fall back to a legacy folder when the assigned folder is revoked', async () => {
+    mockResumeRegistry.ensureOpened.mockResolvedValue({ mode: 'writable' });
+    mockWorkspaceOverrides.get.mockReturnValue('/legacy');
+    mockActiveFolders.resolveAgent.mockImplementation(() => {
+      throw new Error('Assigned folder revoked');
+    });
+
+    await expect(service.resumeThread('t1')).rejects.toThrow(
+      'Assigned folder revoked',
+    );
+    expect(mockCodex.request).not.toHaveBeenCalled();
+    expect(mockBranches.setActiveMember).not.toHaveBeenCalled();
+  });
+
+  it('preserves a native ownership refusal with a stale legacy folder', async () => {
+    const refused = {
+      mode: 'readOnly',
+      ownership: 'refused',
+      ownershipRefusalMessage: 'already has an active writer',
+      thread: { id: 't1', cwd: '/previous', forkedFromId: null },
+      cwd: '/previous',
+    };
+    mockResumeRegistry.ensureOpened.mockResolvedValue(refused);
+    mockActiveFolders.resolveAgent.mockReturnValue('/assigned');
+    mockWorkspaceOverrides.get.mockReturnValue('/legacy');
+
+    await expect(
+      service.resumeThread('t1', { recordActive: false }),
+    ).resolves.toBe(refused);
+    expect(mockCodex.request).not.toHaveBeenCalled();
+  });
+
   it('does not move the active-branch pointer on a background reopen', async () => {
     // Refresh recovery, reconnect recovery and app-server auto-resume all walk
     // every loaded thread. If those writes counted, each tree would end up

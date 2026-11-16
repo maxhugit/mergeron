@@ -419,6 +419,7 @@
           {
             "title": "Reopening and protecting Git copies",
             "paragraphs": [
+              "When reopening, the active folder of the agent’s linked work reference takes precedence over an older folder choice. A conversation already in its assigned folder can reopen while another agent is working, without an unnecessary runtime refresh. An invalid reference remains blocking.",
               "If the isolation context has changed, reopening prepares the folder and refreshes the runtime only when active agents permit it. The folder is saved after the expected profile is acknowledged. If refused, stop the active agents and retry; the conversation and previous folder are preserved. Read-only access and protection of neighboring copies remain enforced."
             ]
           },

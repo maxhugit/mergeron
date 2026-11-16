@@ -213,6 +213,26 @@ describe('copy isolation on workspace reopen', () => {
       ).toBe(false);
     },
   );
+  it('reopens an assigned folder despite a stale workspace override while another agent is active', async () => {
+    const f = fixture();
+    f.setActive(true);
+    Object.assign(f.service, {
+      activeFolders: { resolveAgent: () => '/old' },
+      workspaceOverrides: { get: () => '/copy', setMany: f.persisted },
+    });
+
+    const opened = await f.service.resumeThread('agent', {
+      recordActive: false,
+    });
+
+    expect(opened.mode).toBe('writable');
+    expect(opened.cwd).toBe('/old');
+    expect(f.manager.restartControlled).not.toHaveBeenCalled();
+    expect(f.persisted).not.toHaveBeenCalled();
+    expect(
+      f.codex.request.mock.calls.some(([method]) => method === 'turn/start'),
+    ).toBe(false);
+  });
   it('preserves folder references if active work prevents a safe refresh, then permits retry', async () => {
     const f = fixture();
     f.setActive(true);
