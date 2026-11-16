@@ -141,6 +141,16 @@ celles du demandeur authentifié ; elles ne sont jamais une autorité d’exécu
 Le journal conserve uniquement les métadonnées de vérification et de remise,
 sans consignes ou préférences brutes. Voir les [limites et déclencheurs](docs/consignes-agents.md).
 
+## Renouvellement des droits avant le premier tour
+
+Un agent local connu, inactif, sans aucun tour et toujours dans le même projet
+peut être rendu durable par ses seules métadonnées puis libéré individuellement.
+La reprise attend `thread/closed`, recalcule les autorisations actuelles et exige
+le profil natif exact avant d’envoyer le vrai message. Aucun tour artificiel,
+changement du config.toml partagé ou contournement de propriété des copies n’est
+utilisé. Un état inconnu, une histoire non vide, une révocation ou une fermeture
+non confirmée n’autorise pas ce raccourci. Voir le [fonctionnement détaillé](docs/project-execution-locations.md).
+
 ## Reçus de preview et vérification navigateur
 
 Les reçus de transfert sont bornés et liés à l’archive, à l’empreinte de source,

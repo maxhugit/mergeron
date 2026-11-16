@@ -77,12 +77,21 @@ pour relancer aveuglément le clonage.
 
 Le rattachement est immédiat. Les permissions natives sont renouvelées au
 prochain tour ; l’agent ne doit pas contourner un refus d’écriture entre-temps.
-Le renouvellement d’un moteur chargé reste soumis au contrôle des agents actifs.
-Si les droits changent avant le tout premier tour d’une conversation encore
-non persistée par le moteur, le renouvellement est refusé pour préserver cette
-conversation : rétablir son contexte initial ou créer un agent dans le dossier
-voulu. Un agent créé directement dans une copie libre conserve le même profil
-lorsque cette copie lui est réservée.
+Pour un agent qui n’a encore aucun tour, Mergeron conserve son identifiant et
+son titre, rend ses métadonnées durables puis libère uniquement sa session native.
+Il attend la confirmation `thread/closed` avant de rouvrir cette même conversation
+avec les permissions recalculées. Un agent sans titre reçoit provisoirement son
+identifiant comme nom ; le premier message réel peut toujours le nommer automatiquement.
+Le modèle choisi et les réglages de sécurité observés sont conservés pendant cette reprise.
+Aucun message artificiel, appel au modèle, clonage supplémentaire ou changement
+aux paramètres Codex partagés n’est nécessaire. Les autres agents continuent de travailler.
+
+Le serveur exige une session locale connue, inactive, du même projet, un historique
+paginé vide confirmé après persistance et l’accusé de réception du profil natif
+exact avant d’envoyer le premier message une seule fois. Un moteur incompatible,
+un échec de persistance, une fermeture non confirmée ou des droits révoqués
+restent bloquants. Une conversation ayant déjà des tours conserve la procédure
+de renouvellement existante, soumise au contrôle des agents actifs.
 
 ## Protection des fichiers entre agents
 

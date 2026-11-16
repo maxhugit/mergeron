@@ -489,8 +489,8 @@ export class ThreadsService {
         ErrorCode.threads.threadNotLoaded,
         'The conversation is currently owned by another client',
       );
-    const open = (restarted = false) =>
-      this.resumeAtPreparedCwd(threadId, cwd, restarted ? undefined : opened);
+    const open = (reopen = false) =>
+      this.resumeAtPreparedCwd(threadId, cwd, reopen ? undefined : opened);
     // Loaded Core sessions retain their previous permission definitions. Apply
     // the same guarded refresh used before a turn, including automatic reopens.
     if (this.connections)
@@ -503,6 +503,7 @@ export class ThreadsService {
     cwd: string,
     existing?: ThreadOpenResponseDto,
   ): Promise<void> {
+    const generation = this.connections?.generation();
     const projectPolicy = await this.projectConnections.policyForThread(
       threadId,
       cwd,
@@ -520,28 +521,49 @@ export class ThreadsService {
     if (await isUnmaterializedThread(this.codex, threadId)) {
       // A first user turn will apply the authoritative cwd through turn/start.
       // Resuming now would demand a rollout that Core has not created yet.
-      this.connections?.assertFreshLocationPolicy(threadId, projectPolicy);
-      return;
+      const reopened = await this.connections?.prepareFreshLocation(
+        threadId,
+        projectPolicy,
+        cwd,
+      );
+      if (!reopened) return;
     }
+    const retained = this.connections?.freshResumeState(threadId);
     const security = this.preferences?.forTurn(threadId);
     const observed = this.settingsObserver?.readSecurityPolicy(threadId);
     const readOnly =
       projectPolicy?.readOnly ||
-      (security?.sandboxPolicy ?? observed?.sandboxPolicy)?.type === 'readOnly';
+      (security?.sandboxPolicy ?? observed?.sandboxPolicy)?.type ===
+        'readOnly' ||
+      (!security?.sandboxPolicy &&
+        !observed?.sandboxPolicy &&
+        retained?.readOnly);
     const response = await this.codex.request<v2.ThreadResumeResponse>(
       'thread/resume',
       {
+        ...retained?.parameters,
         threadId,
         cwd,
+        ...(projectPolicy
+          ? {
+              config: {
+                ...projectPolicy.config,
+                ...(retained?.effort
+                  ? { model_reasoning_effort: retained.effort }
+                  : {}),
+              },
+            }
+          : {}),
         excludeTurns: true,
-        ...(projectPolicy ? { config: projectPolicy.config } : {}),
         ...(projectPolicy?.copyPermissions
           ? {
               permissions: readOnly
                 ? projectPolicy.copyPermissions.readOnly
                 : projectPolicy.copyPermissions.writable,
               approvalPolicy: boundedApprovalPolicy(
-                security?.approvalPolicy ?? observed?.approvalPolicy,
+                security?.approvalPolicy ??
+                  observed?.approvalPolicy ??
+                  retained?.parameters.approvalPolicy,
               ),
               runtimeWorkspaceRoots: [cwd],
             }
@@ -557,7 +579,10 @@ export class ThreadsService {
           : projectPolicy.copyPermissions.writable),
       response,
     );
+    this.connections?.assertGeneration(generation);
     this.resumeRegistry.cacheResponse(threadId, response);
+    this.resumeRegistry.markResumed(threadId);
+    this.connections?.record(threadId, projectPolicy, generation);
   }
 
   /** Pages turn history without acquiring writer ownership. */
@@ -655,7 +680,11 @@ export class ThreadsService {
     const shouldAutoName = Boolean(
       !background &&
       beforeTurn &&
-      !beforeTurn.name?.trim() &&
+      (!beforeTurn.name?.trim() ||
+        this.connections?.isPlaceholderName(
+          params.threadId,
+          beforeTurn.name,
+        )) &&
       !beforeTurn.preview?.trim(),
     );
     // `thread/resume` does not reliably replace the cwd of an app-server
@@ -673,12 +702,24 @@ export class ThreadsService {
     // requesting a second process replacement for an as-yet unrecorded policy.
     if (this.connections && !this.resumeRegistry.isResumed(params.threadId))
       await this.resumeRegistry.ensureOpened(params.threadId, 1, 'summary');
-    const connectionState = await this.connections?.beforeTurn(
+    let connectionState = await this.connections?.beforeTurn(
       params.threadId,
       effectiveCwd,
     );
-    if (connectionState?.restarted)
+    if (connectionState?.restarted || connectionState?.reopened)
       await this.resumeRegistry.ensureOpened(params.threadId, 1, 'summary');
+    if (connectionState?.reopened) {
+      // Resume revalidates current ownership and native profile acknowledgement.
+      // A second change while reopening must not dispatch a stale policy.
+      connectionState = await this.connections?.beforeTurn(
+        params.threadId,
+        effectiveCwd,
+      );
+      if (connectionState?.restarted || connectionState?.reopened)
+        throw new ConflictException(
+          'Les droits ont encore changé pendant la reprise. Réessayez.',
+        );
+    }
     const projectPolicy = connectionState
       ? connectionState.policy
       : await this.projectConnections.policyForThread(
@@ -1005,7 +1046,9 @@ export class ThreadsService {
   ): Promise<void> {
     try {
       // A manual rename may have landed while turn/start was in flight.
-      if (this.metadata.getHeldThread(threadId)?.name?.trim()) return;
+      const name = this.metadata.getHeldThread(threadId)?.name;
+      if (name?.trim() && !this.connections?.isPlaceholderName(threadId, name))
+        return;
       await this.setThreadName(threadId, title);
     } catch (error) {
       this.logger.warn(

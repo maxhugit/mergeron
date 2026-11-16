@@ -526,7 +526,7 @@
               "An agent can work directly for a deliverable without a mandatory subtask. If the deliverable has a main task, explicitly selecting a subtask retains both links.",
               "In the Linked to header, the deliverable title opens its details. The adjacent folder icon opens the right-hand explorer directly at its directory without changing the agent’s execution folder.",
               "When the dialog offers an existing agent, choose an available session in the same project that is not already assigned to another task or deliverable. Reusing it does not mean erasing its history.",
-              "A new agent can be associated with a Git copy before its first message. You do not need to create conversation history to prepare the association. The first message starts its conversation; changing locations still requires directory and permission checks."
+              "A new agent can be associated with a Git copy before its first message. If this changes its permissions, Mergeron saves its metadata and reopens the same agent with the current profile, without adding a message or stopping other agents. Its existing title is preserved; a temporary name can still be replaced automatically by its first real message. Failed persistence, closure or permission verification blocks sending."
             ],
             "warning": "Execution actions may be restricted to administrators. Project access or creating a record does not automatically grant permission to run tools."
           },

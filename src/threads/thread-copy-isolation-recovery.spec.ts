@@ -90,7 +90,9 @@ function fixture(readOnly = false) {
         });
       if (method === 'thread/turns/list')
         return Promise.resolve({
-          data: [],
+          data: [
+            { id: 'past-turn', items: [], status: 'completed', error: null },
+          ],
           nextCursor: null,
           backwardsCursor: null,
         });
