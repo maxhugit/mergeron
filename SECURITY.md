@@ -36,6 +36,13 @@ officiel ; le proxy public-only interdit toujours les destinations privées.
 Le chemin secret Playwright ne doit apparaître ni dans les diagnostics publics
 ni dans Git. Voir [le guide d’exploitation](docs/navigateur-annote.md).
 
+Lors d’un changement de dossier d’agent, un profil natif devenu obsolète n’est
+jamais accepté à la place du profil demandé. La reprise renouvelle le contexte
+par le redémarrage contrôlé existant, sans interrompre les agents actifs ; les
+références de dossier restent inchangées si ce renouvellement ou la confirmation
+du profil échoue. Les nouveaux tours sont bloqués pendant cette préparation.
+Voir [les profils et la reprise des copies Git](docs/project-execution-locations.md).
+
 ## Métadonnées des mises à jour
 
 Le Manager conserve son réseau `none` et son accès Docker local. Son inventaire

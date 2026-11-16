@@ -417,6 +417,12 @@
         ],
         "sections": [
           {
+            "title": "Reprise et protection des copies Git",
+            "paragraphs": [
+              "Si le contexte d’isolation a changé, la réouverture prépare le dossier et renouvelle le moteur seulement lorsque les agents actifs le permettent. Le dossier est enregistré après confirmation du profil attendu. En cas de refus, arrêtez les agents actifs puis réessayez ; la conversation et le dossier précédent sont conservés. La lecture seule et la protection des copies voisines restent appliquées."
+            ]
+          },
+          {
             "title": "Les types d’emplacements",
             "paragraphs": [
               "Sous /workspaces/<projet>, Dossiers est réservé à l’organisation libre des utilisateurs. Les livrables, copies Sources et brouillons techniques sont gérés dans les zones internes du projet ; l’explorateur les présente dans leurs vues dédiées. Une connexion Git, SSH/SFTP ou FTP/FTPS décrit une destination ; elle ne constitue pas une copie locale.",

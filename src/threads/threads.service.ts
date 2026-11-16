@@ -479,16 +479,38 @@ export class ThreadsService {
   }
 
   private async resumeAtCwd(threadId: string, cwd: string): Promise<void> {
-    const generation = this.connections?.generation();
-    const projectPolicy = await this.projectConnections.policyForThread(
-      threadId,
-      cwd,
-    );
     const opened = await this.resumeRegistry.ensureOpened(
       threadId,
       1,
       'summary',
     );
+    if (opened.mode !== 'writable')
+      throw BusinessException.conflict(
+        ErrorCode.threads.threadNotLoaded,
+        'The conversation is currently owned by another client',
+      );
+    const open = (reopen = false) =>
+      this.resumeAtPreparedCwd(threadId, cwd, reopen ? undefined : opened);
+    // Loaded Core sessions retain their previous permission definitions. Apply
+    // the same guarded refresh used before a turn, including automatic reopens.
+    if (this.connections)
+      return this.connections.prepareLocation(threadId, cwd, open);
+    return open();
+  }
+
+  private async resumeAtPreparedCwd(
+    threadId: string,
+    cwd: string,
+    existing?: ThreadOpenResponseDto,
+  ): Promise<void> {
+    const generation = this.connections?.generation();
+    const projectPolicy = await this.projectConnections.policyForThread(
+      threadId,
+      cwd,
+    );
+    const opened =
+      existing ??
+      (await this.resumeRegistry.ensureOpened(threadId, 1, 'summary'));
     if (opened.mode !== 'writable') {
       throw BusinessException.conflict(
         ErrorCode.threads.threadNotLoaded,

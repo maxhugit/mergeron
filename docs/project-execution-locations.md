@@ -167,6 +167,21 @@ natifs du serveur (`permissions`), sans transmettre une projection legacy qui
 ferait perdre les interdictions d’écriture sur les copies voisines. Le profil
 effectivement observé doit correspondre avant de sauvegarder le choix.
 
+Lors d’une réouverture ou d’un changement de dossier, une conversation déjà
+chargée peut conserver ses anciens profils natifs malgré un nouvel appel de
+reprise. Mergeron prépare désormais le dossier dans le même circuit de
+renouvellement contrôlé que le démarrage d’un tour. Le dossier en cours de
+validation est utilisé pour les réouvertures automatiques du moteur, puis les
+références sont enregistrées seulement après confirmation du profil attendu.
+Les définitions de permissions sont transmises avec la reprise.
+
+Un refus de propriété native bloque la préparation avant ce renouvellement.
+Si des agents actifs empêchent le redémarrage contrôlé, les références restent
+inchangées et la tentative peut être reprise après leur arrêt. Deux changements
+de dossier et un nouveau tour ne peuvent pas se croiser pendant cette
+validation. Aucun tour de modèle n’est lancé pour préparer le dossier ; la
+lecture seule et le refus des profils non confirmés restent obligatoires.
+
 Cette frontière nécessite les profils natifs du runtime Codex géré actuel
 (0.164.0-mergeron.1). Un ancien moteur sans accusé de réception échoue avant le
 tour avec `GIT_COPY_ISOLATION_UNAVAILABLE`, sans repli permissif. Les profils
