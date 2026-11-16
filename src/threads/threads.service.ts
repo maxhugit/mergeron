@@ -444,7 +444,12 @@ export class ThreadsService {
     let response = options.fullHistory
       ? await this.resumeRegistry.ensureOpened(threadId, 20, 'full')
       : await this.resumeRegistry.ensureOpened(threadId);
-    const override = this.workspaceOverrides.get(threadId);
+    // Match turn execution: a bound work reference supersedes a legacy move.
+    // Reapplying that older move can demand a global refresh while another
+    // agent is active, even though this conversation is already in its folder.
+    const override =
+      this.activeFolders.resolveAgent(threadId) ??
+      this.workspaceOverrides.get(threadId);
     if (override && response.mode === 'writable' && response.cwd !== override) {
       await this.resumeAtCwd(threadId, override);
       response = {

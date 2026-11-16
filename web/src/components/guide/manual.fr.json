@@ -419,6 +419,7 @@
           {
             "title": "Reprise et protection des copies Git",
             "paragraphs": [
+              "À la réouverture, le dossier actif de la référence liée à l’agent est prioritaire sur un ancien choix de dossier. Une conversation déjà dans son dossier peut être rouverte pendant qu’un autre agent travaille, sans renouvellement inutile du moteur. Une référence invalide reste bloquante.",
               "Si le contexte d’isolation a changé, la réouverture prépare le dossier et renouvelle le moteur seulement lorsque les agents actifs le permettent. Le dossier est enregistré après confirmation du profil attendu. En cas de refus, arrêtez les agents actifs puis réessayez ; la conversation et le dossier précédent sont conservés. La lecture seule et la protection des copies voisines restent appliquées."
             ]
           },

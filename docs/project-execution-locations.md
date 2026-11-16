@@ -167,6 +167,13 @@ natifs du serveur (`permissions`), sans transmettre une projection legacy qui
 ferait perdre les interdictions d’écriture sur les copies voisines. Le profil
 effectivement observé doit correspondre avant de sauvegarder le choix.
 
+À la réouverture comme au lancement d’un tour, le dossier actif de la référence
+liée à l’agent est prioritaire sur une ancienne préférence de déplacement.
+Une conversation déjà ouverte dans ce dossier ne revient pas à l’ancien chemin
+et ne demande pas de renouvellement global à cause de cette préférence obsolète,
+même lorsqu’un autre agent travaille. Sans référence active, le déplacement
+explicite reste pris en compte. Une référence révoquée ou invalide reste bloquante.
+
 Lors d’une réouverture ou d’un changement de dossier, une conversation déjà
 chargée peut conserver ses anciens profils natifs malgré un nouvel appel de
 reprise. Mergeron prépare désormais le dossier dans le même circuit de
