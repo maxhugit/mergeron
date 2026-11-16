@@ -213,17 +213,19 @@ Un principal déjà migré qui disparaît du disque n'est pas recréé automatiq
 ## Changement de dossier avant le premier message
 
 Une conversation chargée et détenue par Mergeron peut choisir une copie Git avant
-son premier message, sans fabriquer d'échange ni relancer `thread/resume` sur un
-historique qui n'existe pas encore. Le serveur exige le refus structuré précis de
-`thread/turns/list` indiquant un agent non matérialisé : une page vide persistée,
-une erreur de permissions ou un historique disparu ne sont pas assimilés à ce cas.
+son premier message. Si les droits natifs restent identiques, son dossier est
+appliqué au premier vrai `turn/start`. Si l’affectation ou la création de copie
+change son profil, Mergeron persiste ses métadonnées sans créer de tour, attend
+la fermeture de sa seule session native, puis reprend le même identifiant avec
+la configuration actuelle. Le titre existant est conservé ; le nom provisoire
+d’un agent sans titre n’empêche pas le nommage depuis son premier vrai message.
 
-Le dossier choisi est appliqué au premier vrai `turn/start`, avec les contrôles de
-projet, de chemin et de sandbox habituels. Le moteur n'est conservé sans redémarrage
-que si les transports MCP et les applications autorisées sont strictement identiques
-dans le même projet. Une configuration native modifiée bloque ce raccourci, sans
-détruire la conversation neuve. Les conversations déjà matérialisées conservent leur
-procédure de reprise et de renouvellement des connexions.
+Le refus structuré de `thread/turns/list` identifie une session non matérialisée.
+Une page vide persistée indique une autre situation également récupérable, sans
+assimiler une erreur de permissions ou un historique disparu à une conversation
+vide. L’historique paginé vide, l’inactivité, le projet, le dossier et le profil
+natif accepté sont vérifiés avant le premier envoi. Aucun autre agent n’est arrêté.
+Les conversations ayant déjà des tours conservent leur procédure de renouvellement.
 
 L'association enregistre ensemble le dossier actif, le rattachement au projet et le
 chemin des échanges suivants. En cas d'échec, seule une réservation de copie créée

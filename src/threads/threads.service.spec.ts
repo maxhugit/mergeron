@@ -814,6 +814,75 @@ describe('ThreadsService', () => {
     expect(order).toEqual(['resume', 'turn']);
   });
 
+  it.each([true, false])(
+    'reopens an empty agent and only sends its original input when the new profile is acknowledged (%s)',
+    async (acknowledged) => {
+      const copyPermissions = {
+        writable: 'new-copy-profile',
+        readOnly: 'new-copy-read',
+        baseProfile: ':workspace',
+        writableCopyPath: '/copy',
+        readOnlyRoots: ['/other-copy'],
+      };
+      const policy = {
+        projectId: 'p',
+        config: {},
+        readOnly: false,
+        copyPermissions,
+      };
+      const beforeTurn = vi
+        .fn()
+        .mockResolvedValueOnce({ policy, restarted: false, reopened: true })
+        .mockResolvedValue({ policy, restarted: false });
+      Object.assign(service, {
+        connections: {
+          assertOpen: vi.fn(),
+          assertGeneration: vi.fn(),
+          beforeTurn,
+        },
+      });
+      const order: string[] = [];
+      mockResumeRegistry.ensureOpened.mockImplementation(() => {
+        order.push('resume');
+        cachedPermissionProfile.mockReturnValue({
+          activePermissionProfile: {
+            id: acknowledged ? 'new-copy-profile' : 'old-copy-profile',
+          },
+        });
+        return Promise.resolve({ mode: 'writable' });
+      });
+      mockCodex.request.mockImplementation(() => {
+        order.push('turn');
+        return Promise.resolve({ turn: { id: 'first' } });
+      });
+      const input = [
+        { type: 'text' as const, text: 'hello', text_elements: [] },
+      ];
+      const start = service.startTurn({ threadId: 't1', input });
+      if (!acknowledged) {
+        await expect(start).rejects.toThrow('GIT_COPY_ISOLATION_UNAVAILABLE');
+        expect(order).toEqual(['resume']);
+        expect(mockCodex.request).not.toHaveBeenCalled();
+      } else {
+        await start;
+        expect(order).toEqual(['resume', 'turn']);
+        expect(mockCodex.request).toHaveBeenCalledWith(
+          'turn/start',
+          expect.objectContaining({
+            threadId: 't1',
+            input,
+            permissions: 'new-copy-profile',
+          }),
+        );
+        expect(
+          mockCodex.request.mock.calls.filter(
+            ([method]) => method === 'turn/start',
+          ),
+        ).toHaveLength(1);
+      }
+    },
+  );
+
   it('does not dispatch a turn when the project integration policy cannot be enforced', async () => {
     Object.assign(service, {
       connections: {

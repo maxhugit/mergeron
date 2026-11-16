@@ -130,12 +130,25 @@ export class ThreadHistoryService {
     const policy = await this.connections?.forResume(params.threadId);
     this.connections?.assertGeneration(generation);
     this.connections?.assertExecutionLocation(policy ?? null);
+    const retained = this.connections?.freshResumeState?.(params.threadId);
     const savedSecurity = this.preferences?.read(params.threadId).security;
     const readOnly =
-      policy?.readOnly || savedSecurity?.sandboxPolicy?.type === 'readOnly';
+      policy?.readOnly ||
+      savedSecurity?.sandboxPolicy?.type === 'readOnly' ||
+      (!savedSecurity?.sandboxPolicy && retained?.readOnly);
     const request: ExperimentalResumeParams = {
+      ...retained?.parameters,
       threadId: params.threadId,
-      ...(policy ? { config: policy.config } : {}),
+      ...(policy
+        ? {
+            config: {
+              ...policy.config,
+              ...(retained?.effort
+                ? { model_reasoning_effort: retained.effort }
+                : {}),
+            },
+          }
+        : {}),
       ...(policy?.executionCwd ? { cwd: policy.executionCwd } : {}),
       ...(policy?.copyPermissions
         ? {
@@ -143,7 +156,8 @@ export class ThreadHistoryService {
               ? policy.copyPermissions.readOnly
               : policy.copyPermissions.writable,
             approvalPolicy: boundedApprovalPolicy(
-              savedSecurity?.approvalPolicy,
+              savedSecurity?.approvalPolicy ??
+                retained?.parameters.approvalPolicy,
             ),
             runtimeWorkspaceRoots: policy.executionCwd
               ? [policy.executionCwd]
