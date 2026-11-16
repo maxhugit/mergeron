@@ -417,6 +417,12 @@
         ],
         "sections": [
           {
+            "title": "Reopening and protecting Git copies",
+            "paragraphs": [
+              "If the isolation context has changed, reopening prepares the folder and refreshes the runtime only when active agents permit it. The folder is saved after the expected profile is acknowledged. If refused, stop the active agents and retry; the conversation and previous folder are preserved. Read-only access and protection of neighboring copies remain enforced."
+            ]
+          },
+          {
             "title": "Types of locations",
             "paragraphs": [
               "Under /workspaces/<project>, Folders is reserved for user organization. Deliverables, Source copies and technical drafts live in managed internal project areas and appear in dedicated explorer views. A Git, SSH/SFTP or FTP/FTPS connection describes a destination, not a local copy.",

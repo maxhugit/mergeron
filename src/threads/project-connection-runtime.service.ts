@@ -18,6 +18,7 @@ export class ProjectConnectionRuntimeService {
     string,
     { context: string; transport: string }
   >();
+  private readonly pendingLocations = new Map<string, string>();
   private changing = false;
   constructor(
     private readonly codex: CodexService,
@@ -119,7 +120,10 @@ export class ProjectConnectionRuntimeService {
       'thread/read',
       { threadId, includeTurns: false },
     );
-    const cwd = this.folders?.resolveAgent(threadId) ?? metadata.thread.cwd;
+    const cwd =
+      this.pendingLocations.get(threadId) ??
+      this.folders?.resolveAgent(threadId) ??
+      metadata.thread.cwd;
     const policy = await this.policies.policyForThread(threadId, cwd);
     this.assertOpen();
     if (
@@ -127,7 +131,7 @@ export class ProjectConnectionRuntimeService {
       metadata.thread.status.type !== 'notLoaded' &&
       this.applied.get(threadId)?.context !== this.key(policy)
     ) {
-      await this.beforeTurn(threadId, cwd);
+      await this.refreshContext(threadId, cwd);
       throw new ConflictException(
         'Les connexions MCP ont été renouvelées. Rouvrez la conversation.',
       );
@@ -135,7 +139,35 @@ export class ProjectConnectionRuntimeService {
     return policy;
   }
 
+  /** Validate a pending folder before its references are committed. No model turn may race it. */
+  async prepareLocation<T>(
+    threadId: string,
+    cwd: string,
+    open: (restarted: boolean) => Promise<T>,
+  ): Promise<T> {
+    this.assertOpen();
+    if (this.pendingLocations.has(threadId))
+      throw new ConflictException(
+        'Le dossier de cet agent est en cours de validation. Réessayez.',
+      );
+    this.pendingLocations.set(threadId, cwd);
+    try {
+      const context = await this.refreshContext(threadId, cwd);
+      return await open(context.restarted);
+    } finally {
+      this.pendingLocations.delete(threadId);
+    }
+  }
+
   async beforeTurn(threadId: string, cwd: string | null) {
+    if (this.pendingLocations.has(threadId))
+      throw new ConflictException(
+        'Le dossier de cet agent est en cours de validation. Réessayez.',
+      );
+    return this.refreshContext(threadId, cwd);
+  }
+
+  private async refreshContext(threadId: string, cwd: string | null) {
     this.assertOpen();
     const generation = this.generation();
     const policy = await this.policies.policyForThread(threadId, cwd);
