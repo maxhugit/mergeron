@@ -422,6 +422,7 @@ describe('native internal MCP over HTTP', () => {
     );
   });
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await Promise.all(clients.splice(0).map((client) => client.close()));
     await service.onModuleDestroy();
     database.sqlite.close();
@@ -1560,6 +1561,7 @@ describe('native internal MCP over HTTP', () => {
   });
 
   it('never upgrades a read-only running turn or resets the same-turn call budget', async () => {
+    vi.stubEnv('MERGERON_MCP_CALLS_PER_TURN', '100');
     const { client } = await connect();
     activate('admin', false);
     asPerson('admin', () =>
@@ -1578,6 +1580,21 @@ describe('native internal MCP over HTTP', () => {
     asPerson('admin', () =>
       service.prepareRenewal('agent', 'turn-1')?.commit(),
     );
+    expect(JSON.stringify(await read())).toContain('RATE_LIMIT');
+  });
+
+  it('allows more than 100 calls and freezes the configured ceiling across same-turn renewal', async () => {
+    vi.stubEnv('MERGERON_MCP_CALLS_PER_TURN', '150');
+    const { client } = await connect();
+    activate();
+    const read = () => client.callTool({ name: 'project_get', arguments: {} });
+    for (let i = 0; i < 110; i++) expect((await read()).isError).not.toBe(true);
+    vi.stubEnv('MERGERON_MCP_CALLS_PER_TURN', '1000');
+    asPerson('admin', () =>
+      service.prepareRenewal('agent', 'turn-1')?.commit(),
+    );
+    for (let i = 110; i < 150; i++)
+      expect((await read()).isError).not.toBe(true);
     expect(JSON.stringify(await read())).toContain('RATE_LIMIT');
   });
 

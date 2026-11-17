@@ -930,7 +930,7 @@
             "title": "Documentation pour les administrateurs",
             "paragraphs": [
               "Paramètres → MCP interne présente les méthodes, paramètres, exemples et règles de droits issus du catalogue du serveur. Cette référence n’est pas une console d’exécution et ne donne aucun droit supplémentaire.",
-              "Ces outils sont destinés aux agents de travail rattachés."
+              "Ces outils sont destinés aux agents de travail rattachés. Le budget MCP interne est de 1 000 appels par tour par défaut, y compris pour les outils GitHub. RATE_LIMIT indique ce plafond interne ; GIT_GITHUB_RATE_LIMIT indique une limite imposée par GitHub. Un renouvellement d’autorisation ne remet pas le compteur à zéro."
             ]
           },
           {
