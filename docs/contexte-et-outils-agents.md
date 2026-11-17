@@ -551,8 +551,13 @@ de recherche du serveur utilise son empreinte SHA-256.
 
 La connexion est stable mais ne suffit pas à exécuter un outil : une autorisation
 de tour active est nécessaire. Elle est liée à la personne authentifiée, au projet
-et à la conversation, avec une validité d’une heure et un plafond de 100 appels
-par tour. Un message supplémentaire accepté par le moteur pour le même tour ou
+et à la conversation, avec une validité d’une heure et un plafond de 1 000 appels
+par tour par défaut. `MERGERON_MCP_CALLS_PER_TURN` permet de choisir une valeur
+entre 100 et 10 000 dans l’environnement du backend ; une valeur absente ou
+invalide conserve 1 000. Le plafond est fixé au début du tour et conservé lors
+d’un renouvellement : modifier la configuration ne recharge pas le budget d’un
+tour déjà actif. Il couvre tous les outils MCP internes, dont GitHub ; il ne
+modifie ni les quotas de GitHub ni la concurrence de son ordonnanceur de lectures. Un message supplémentaire accepté par le moteur pour le même tour ou
 une réponse humaine positive à une demande encore en attente renouvelle cette
 heure après vérification de l’identité et des accès. Le plafond d’appels n’est pas
 remis à zéro et les droits d’écriture du tour ne sont jamais augmentés par ce

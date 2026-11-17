@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ZodError } from 'zod';
+import { internalMcpCallBudget } from './internal-mcp-limits';
 import { LocalAgentsService } from '../local-agents/local-agents.service';
 import {
   createServer,
@@ -50,6 +51,7 @@ interface Lease {
   writes: boolean;
   expiresAt: number;
   calls: number;
+  maxCalls: number;
   revoked: boolean;
   turnId?: string;
   completed?: boolean;
@@ -192,6 +194,7 @@ export class InternalMcpService implements OnModuleDestroy {
       writes,
       expiresAt: Date.now() + 3600000,
       calls: 0,
+      maxCalls: internalMcpCallBudget(),
       revoked: false,
       processing: Promise.resolve(),
     };
@@ -274,6 +277,7 @@ export class InternalMcpService implements OnModuleDestroy {
           writes: nextWrites,
           expiresAt: Date.now() + 3600000,
           calls: previous.calls,
+          maxCalls: previous.maxCalls,
           revoked: false,
           turnId,
           // Keep serialization with uncertain/in-flight operations. Their captured
@@ -344,7 +348,7 @@ export class InternalMcpService implements OnModuleDestroy {
         throw new Error('READ_ONLY');
     };
     check();
-    if (++lease!.calls > 100) throw new Error('RATE_LIMIT');
+    if (++lease!.calls > lease!.maxCalls) throw new Error('RATE_LIMIT');
     const operation = lease!.processing
       .catch(() => {})
       .then(async () => {
