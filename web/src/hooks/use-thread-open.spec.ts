@@ -10,10 +10,16 @@ import { applyOpenResponse, applyReadOnlySnapshot } from './use-thread-open';
 vi.mock('@/socket', () => ({ getSocket: () => ({ emit: vi.fn() }) }));
 vi.mock('@/stores/thread-policy-store', () => ({
   useThreadPolicyStore: { getState: () => ({ pendingByThread: {} }) },
-  refreshThreadPolicy: vi.fn(async () => undefined), settleIfObserved: vi.fn(), forgetThreadPolicy: vi.fn(),
+  refreshThreadPolicy: vi.fn(async () => undefined),
+  settleIfObserved: vi.fn(),
+  forgetThreadPolicy: vi.fn(),
 }));
-vi.mock('@/lib/restore-history-bookmark', () => ({ restoreHistoryBookmark: vi.fn(async () => undefined) }));
-vi.mock('@/lib/thread-recovery', () => ({ recoverThreadAfterReconnect: vi.fn(async () => true) }));
+vi.mock('@/lib/restore-history-bookmark', () => ({
+  restoreHistoryBookmark: vi.fn(async () => undefined),
+}));
+vi.mock('@/lib/thread-recovery', () => ({
+  recoverThreadAfterReconnect: vi.fn(async () => true),
+}));
 vi.mock('@/generated/api/sdk.gen', () => ({
   tokenUsageReadThreadTokenUsage: vi.fn(async () => ({})),
   turnDiffReadThreadTurnDiffs: vi.fn(async () => ({})),
@@ -22,22 +28,50 @@ vi.mock('@/generated/api/sdk.gen', () => ({
 const pristine = useTimelineStore.getState();
 const pristineModels = useModelStore.getState();
 const running: TurnDto = {
-  id: 'turn', status: 'inProgress', items: [], itemsView: 'full', error: null,
-  startedAt: null, completedAt: null, durationMs: null,
+  id: 'turn',
+  status: 'inProgress',
+  items: [],
+  itemsView: 'full',
+  error: null,
+  startedAt: null,
+  completedAt: null,
+  durationMs: null,
 };
 function response(): ThreadOpenResponseDto {
   return {
-    mode: 'writable', ownership: 'acquired', cwd: '/workspace',
+    mode: 'writable',
+    ownership: 'acquired',
+    cwd: '/workspace',
     thread: {
-      id: 't', name: 'thread', preview: '', status: { type: 'idle' }, cwd: '/workspace',
-      forkedFromId: null, ephemeral: false, modelProvider: 'test', model: null,
-      reasoningEffort: null, createdAt: 0, updatedAt: 0, path: null,
-      cliVersion: '0.153.2', source: 'appServer', agentNickname: null,
-      agentRole: null, gitInfo: null, turns: [],
+      id: 't',
+      name: 'thread',
+      preview: '',
+      status: { type: 'idle' },
+      cwd: '/workspace',
+      forkedFromId: null,
+      ephemeral: false,
+      modelProvider: 'test',
+      model: null,
+      reasoningEffort: null,
+      createdAt: 0,
+      updatedAt: 0,
+      path: null,
+      cliVersion: '0.153.2',
+      source: 'appServer',
+      agentNickname: null,
+      agentRole: null,
+      gitInfo: null,
+      turns: [],
     },
-    reasoningEffort: 'low', serviceTier: null,
-    initialTurnsPage: { data: [running], nextCursor: null, backwardsCursor: null },
-    turnsBackwardsCursor: null, itemsBackwardsCursor: null,
+    reasoningEffort: 'low',
+    serviceTier: null,
+    initialTurnsPage: {
+      data: [running],
+      nextCursor: null,
+      backwardsCursor: null,
+    },
+    turnsBackwardsCursor: null,
+    itemsBackwardsCursor: null,
   };
 }
 beforeEach(() => {
@@ -49,21 +83,41 @@ beforeEach(() => {
 describe('open response authority', async () => {
   it('does not revive a turn completed while opening', async () => {
     const baseline = nextObservationSeq();
-    useTimelineStore.getState().updateCurrentTurnForThread('t', 'turn', () => ({ items: [], completed: true }));
+    useTimelineStore
+      .getState()
+      .updateCurrentTurnForThread('t', 'turn', () => ({
+        items: [],
+        completed: true,
+      }));
     await applyOpenResponse(response(), baseline);
-    expect(useTimelineStore.getState().getThreadRuntime('t')).toMatchObject({ activeTurnId: null, turnStartPending: false });
+    expect(useTimelineStore.getState().getThreadRuntime('t')).toMatchObject({
+      activeTurnId: null,
+      turnStartPending: false,
+    });
   });
 
   it('does not overwrite settings observed after the open request', async () => {
     const baseline = nextObservationSeq();
-    useModelStore.getState().setObservedThreadSettings('t', { effort: 'high', serviceTier: 'fast' }, nextObservationSeq());
+    useModelStore
+      .getState()
+      .setObservedThreadSettings(
+        't',
+        { effort: 'high', serviceTier: 'fast' },
+        nextObservationSeq(),
+      );
     await applyOpenResponse(response(), baseline);
     expect(useModelStore.getState().observedEffortByThread.t).toBe('high');
     expect(useModelStore.getState().observedServiceTierByThread.t).toBe('fast');
   });
 
   it('does not claim freshness when a caller has no request baseline', async () => {
-    useModelStore.getState().setObservedThreadSettings('t', { effort: 'high', serviceTier: 'fast' }, nextObservationSeq());
+    useModelStore
+      .getState()
+      .setObservedThreadSettings(
+        't',
+        { effort: 'high', serviceTier: 'fast' },
+        nextObservationSeq(),
+      );
     await applyOpenResponse(response());
     expect(useModelStore.getState().observedEffortByThread.t).toBe('high');
   });
@@ -77,18 +131,108 @@ describe('open response authority', async () => {
   });
 
   it('forgets the sequence alongside its model observations', async () => {
-    useModelStore.getState().setObservedThreadSettings('t', { effort: 'high', serviceTier: 'fast' }, nextObservationSeq());
+    useModelStore
+      .getState()
+      .setObservedThreadSettings(
+        't',
+        { effort: 'high', serviceTier: 'fast' },
+        nextObservationSeq(),
+      );
     useModelStore.getState().forgetObservedThreadEffort('t');
-    expect(useModelStore.getState().observedSettingsSeqByThread.t).toBeUndefined();
+    expect(
+      useModelStore.getState().observedSettingsSeqByThread.t,
+    ).toBeUndefined();
   });
 });
 
 it('keeps a degraded read-only open gated until its historical bookmark is recovered', async () => {
   let finish!: () => void;
-  vi.mocked(restoreHistoryBookmark).mockReturnValueOnce(new Promise<void>((resolve) => { finish = resolve; }));
+  vi.mocked(restoreHistoryBookmark).mockReturnValueOnce(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
   const opened = response();
-  const pending = applyReadOnlySnapshot({ thread: opened.thread }, opened.initialTurnsPage);
-  expect(useTimelineStore.getState().getThreadRuntime('t')?.openState).toBe('opening');
-  finish(); await pending;
-  expect(useTimelineStore.getState().getThreadRuntime('t')?.openState).toBe('ready');
+  const pending = applyReadOnlySnapshot(
+    { thread: opened.thread },
+    opened.initialTurnsPage,
+  );
+  expect(useTimelineStore.getState().getThreadRuntime('t')?.openState).toBe(
+    'opening',
+  );
+  finish();
+  await pending;
+  expect(useTimelineStore.getState().getThreadRuntime('t')?.openState).toBe(
+    'ready',
+  );
+});
+
+it('makes an owned thread interactive while full history is still pending', async () => {
+  const { recoverThreadAfterReconnect } = await import('@/lib/thread-recovery');
+  const { refreshThreadPolicy } = await import('@/stores/thread-policy-store');
+  let finishHistory!: (complete: boolean) => void;
+  let finishPolicy!: () => void;
+  vi.mocked(recoverThreadAfterReconnect).mockReturnValueOnce(
+    new Promise<boolean>((resolve) => {
+      finishHistory = resolve;
+    }),
+  );
+  vi.mocked(refreshThreadPolicy).mockReturnValueOnce(
+    new Promise<undefined>((resolve) => {
+      finishPolicy = () => resolve(undefined);
+    }),
+  );
+  const opened = response();
+  opened.initialTurnsPage.data = [{ ...running, itemsView: 'summary' }];
+  useTimelineStore
+    .getState()
+    .setOpenStateForThread('t', { openState: 'opening' });
+  const pending = applyOpenResponse(
+    opened,
+    nextObservationSeq(),
+    Promise.resolve(true),
+    true,
+  );
+  await Promise.resolve();
+  expect(useTimelineStore.getState().getThreadRuntime('t')?.openState).toBe(
+    'opening',
+  );
+  finishPolicy();
+  await Promise.resolve();
+  expect(useTimelineStore.getState().getThreadRuntime('t')).toMatchObject({
+    openState: 'ready',
+    historyRequest: 'loading',
+    activeTurnId: 'turn',
+  });
+  expect(vi.mocked(recoverThreadAfterReconnect)).toHaveBeenLastCalledWith(
+    't',
+    undefined,
+    expect.any(Number),
+  );
+  finishHistory(true);
+  await pending;
+  expect(
+    useTimelineStore.getState().getThreadRuntime('t')?.historyRequest,
+  ).toBe('idle');
+});
+
+it('does not treat an implicit summary response as complete transcript history', () => {
+  const opened = response();
+  opened.initialTurnsPage.data = [{ ...running, itemsView: 'summary' }];
+  expect(() => applyOpenResponse(opened)).toThrow();
+});
+
+it('does not reopen a deleted thread when a delayed policy read finishes', async () => {
+  const { refreshThreadPolicy } = await import('@/stores/thread-policy-store');
+  let finish!: () => void;
+  vi.mocked(refreshThreadPolicy).mockReturnValueOnce(
+    new Promise<undefined>((resolve) => {
+      finish = () => resolve(undefined);
+    }),
+  );
+  const pending = applyOpenResponse(response());
+  useTimelineStore.getState().forgetThreads(['t']);
+  finish();
+  await pending;
+  expect(useTimelineStore.getState().getThreadRuntime('t')).toBeNull();
 });

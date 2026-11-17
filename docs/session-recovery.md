@@ -296,7 +296,12 @@ ou suppression de l’onglet par le navigateur ; les lecteurs externes peuvent
 aussi devoir reconstruire leur propre session à la reprise.
 
 `session-recovery.ts`, installé avant le rendu, ferme immédiatement une barrière
-locale au retour après 30 secondes sans vérification ou après un refus de session.
+locale au retour après plus de 30 secondes d’inactivité en arrière-plan, après
+une coupure réseau, une restauration du document depuis l’historique du navigateur
+ou un refus de session. La date du dernier contrôle ne suffit plus à déclarer
+un onglet actif inactif. Les changements de fenêtre et les brefs changements
+d’onglet gardent le socket et l’espace de travail actifs pendant la vérification
+en arrière-plan. Une erreur de vérification ferme toujours la barrière.
 Les requêtes API protégées sont rejetées avec `AbortError`, jamais mises en file ;
 les réponses antérieures à la fermeture sont écartées. Seuls les points de
 connexion et la vérification d’identité restent utilisables. Le socket est

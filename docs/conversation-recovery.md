@@ -189,7 +189,12 @@ bulk page-load restoration call and no unused `pageLoad` reason.
 | `reconnect`            | Passive metadata/history/items, policy and recorded auxiliary data; refresh viewed goal/mode queries; no upstream resume |
 
 Initial HTTP hydration and Socket.IO joining are independent. The transcript
-keeps a cold loading gate until full history and target geometry are settled; an acknowledged join is followed by
+keeps the composer gated until native ownership/profile confirmation and policy refresh.
+The browser opts into `deferHistory=true` on resume: turn headers describe lifecycle
+without being presented as transcript content. Sending can proceed independently
+of full history, auxiliary reads and bookmark restoration. A loading/error banner
+keeps background coverage explicit. Existing HTTP callers still receive full
+history by default. An acknowledged join is followed by
 a fresh history read to cover events missed before joining. The first socket
 connection also repairs a view already hydrated over HTTP. Recovery iterations
 supersede older item reads, while reopen/deletion/restart invalidate the whole
@@ -197,13 +202,14 @@ conversation incarnation. A transport repair does not discard a valid open
 response merely because both overlap. Policy confirmation retains its separate
 direct fresh read and is never routed through generic query deduplication.
 
-Recent history uses explicit descending full pages, bounded to ten pages of
-20 turns. The anchor is captured before the read; a newly received live turn
+Recent history starts with two full turns. Gap recovery is bounded to ten
+explicit descending pages, using 20 turns for subsequent pages. Explicit
+older-history and bookmark pages also remain 20 turns. The anchor is captured before the read; a newly received live turn
 cannot hide a gap behind it. Returned turns are merged by identity and page
 order, including interior holes, and terminal lifecycle never moves backwards.
 Full pages repair their covered turns without per-row top-ups. Turns outside
 that window are read individually only on evidence: an unterminated item or the
-turn believed to be running blocks the reveal, while a merely-older completed
+turn believed to be running is required for history recovery, while a merely-older completed
 turn is swept for missed late items under a cap that neither blocks the open nor
 grows with the reader's paging — see [workspace-tabs.md](workspace-tabs.md).
 If no pre-read anchor is found,

@@ -3348,6 +3348,10 @@ export type ThreadsResumeThreadData = {
          * Pass false for background reopens (refresh or reconnect recovery) so the tree's active-branch pointer keeps naming what the user last opened.
          */
         recordActive?: boolean;
+        /**
+         * Return turn headers only; fetch full history separately after ownership is confirmed. Defaults to false.
+         */
+        deferHistory?: boolean;
     };
     url: '/api/threads/{threadId}/resume';
 };

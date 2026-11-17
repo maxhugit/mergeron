@@ -42,7 +42,7 @@ it('reads only four background agents sequentially, caches one full recent page 
   ).toEqual(['b', 'c', 'd', 'e']);
   expect(threadsListTurns).toHaveBeenCalledWith(
     expect.objectContaining({
-      query: { limit: 20, sortDirection: 'desc', itemsView: 'full' },
+      query: { limit: 2, sortDirection: 'desc', itemsView: 'full' },
       signal,
     }),
   );

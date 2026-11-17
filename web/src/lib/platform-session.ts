@@ -334,7 +334,8 @@ export function usePlatformSession() {
         throw error;
       }
     },
-    staleTime: 10_000,
+    // Consumers mounting during navigation share the periodic check's freshness.
+    staleTime: SESSION_CHECK_INTERVAL_MS,
     // Recovery and polling are shared by all consumers of this identity.
     refetchInterval: false,
     refetchOnReconnect: false,

@@ -43,6 +43,9 @@ export function ConversationFrame({
   const historyError = useTimelineStore(
     (s) => s.threadsById[threadId]?.historyError,
   );
+  const historyLoading = useTimelineStore(
+    (s) => s.threadsById[threadId]?.historyRequest === 'loading',
+  );
   // A prefetched page may be read while the normal open verifies ownership.
   // Sending remains gated by ChatInput's observed openState === 'ready'.
   const dataReady =
@@ -87,7 +90,7 @@ export function ConversationFrame({
             />
           </div>
         </div>
-        {(!dataReady || !layoutReady) && (
+        {(!dataReady || !layoutReady) && openState !== 'ready' && (
           <div
             data-history-gate
             className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-background p-6 text-center text-sm text-muted-foreground"
@@ -107,8 +110,7 @@ export function ConversationFrame({
           </div>
         )}
         {dataReady &&
-          layoutReady &&
-          (historyError || openState !== 'ready') && (
+          (historyError || historyLoading || openState !== 'ready') && (
             <div className="absolute inset-x-0 top-0 z-20 flex items-center gap-3 border-b bg-background px-4 py-2 text-xs">
               <span className="flex-1">
                 {historyError ?? t('loadingConversation')}

@@ -196,6 +196,7 @@ describe('platform session recovery', () => {
     });
     network.mockClear();
     visibility.mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(31_000);
     });
@@ -236,7 +237,7 @@ describe('platform session recovery', () => {
     client.clear();
   });
 
-  it('does not throttle a newly required verification behind an older in-flight focus check', async () => {
+  it.each(['bfcache', 'network'])('supersedes on %s', async (trigger) => {
     vi.useFakeTimers();
     disposeRecovery();
     const visibility = vi
@@ -291,7 +292,18 @@ describe('platform session recovery', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_000);
     });
-    act(() => window.dispatchEvent(new Event('focus')));
+    await act(async () => {
+      if (trigger === 'network') {
+        window.dispatchEvent(new Event('offline'));
+        window.dispatchEvent(new Event('online'));
+      } else {
+        const restored = new Event('pageshow');
+        Object.defineProperty(restored, 'persisted', { value: true });
+        window.dispatchEvent(restored);
+      }
+      // The online manager resumes its paused probe in a microtask.
+      await vi.advanceTimersByTimeAsync(1);
+    });
     expect(network).toHaveBeenCalledTimes(2);
     expect(oldSignal?.aborted).toBe(true);
     expect(isSessionPaused()).toBe(true);

@@ -138,3 +138,22 @@ it('does not read while the session is paused or the tab is hidden; resumes warm
   await act(() => vi.advanceTimersByTimeAsync(300));
   expect(prefetchAgentNavigation).toHaveBeenCalledTimes(1);
 });
+
+it('gives the selected history priority even after the composer becomes ready', async () => {
+  timeline
+    .getState()
+    .setOpenStateForThread('selected', {
+      openState: 'ready',
+      historyRequest: 'loading',
+    });
+  show();
+  await act(() => vi.advanceTimersByTimeAsync(500));
+  expect(prefetchAgentNavigation).not.toHaveBeenCalled();
+  act(() =>
+    timeline
+      .getState()
+      .setOpenStateForThread('selected', { historyRequest: 'idle' }),
+  );
+  await act(() => vi.advanceTimersByTimeAsync(300));
+  expect(prefetchAgentNavigation).toHaveBeenCalledOnce();
+});

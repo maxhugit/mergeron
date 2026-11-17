@@ -16,6 +16,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DragDropProvider } from '@dnd-kit/react';
 import { AgentWorkspaceHost } from './agent-workspace-host';
 import { ChatInput } from './chat-input';
+import { ConversationFrame } from './conversation-frame';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router';
 import { WorkspaceOverview } from './sidebar/workspace-overview';
 import { useWorkspaceNavigation } from '@/hooks/use-workspace-navigation';
 import { useTimelineStore as timeline } from '@/stores/timeline-store';
@@ -58,6 +66,7 @@ vi.mock('@/lib/navigation-workspace-check', () => ({
 }));
 vi.mock('@/hooks/use-thread-open', () => ({
   useOpenThread: () => ({ mutate: calls.open }),
+  useLoadOlderHistory: () => vi.fn(),
   HISTORY_PAGE_SIZE: 20,
   applyReadOnlySnapshot: vi.fn(),
 }));
@@ -604,3 +613,78 @@ test('withdraws repository, file overflow and right-click menus without resurrec
   act(() => client.setQueryData(projectsQueryKey, { projects: [other] }));
   await waitFor(() => expect(cache.getState().projectId).toBeNull());
 });
+
+test.each([390, 1180])(
+  'allows sending before background history arrives at %ipx',
+  async (width) => {
+    await page.viewport(width, 900);
+    const network = vi
+      .spyOn(window, 'fetch')
+      .mockImplementation(
+        async () =>
+          new Response(
+            JSON.stringify({ mode: 'collapsed', groups: [], tracked: false }),
+            { headers: { 'Content-Type': 'application/json' } },
+          ),
+      );
+    const store = timeline.getState();
+    store.selectThread('a');
+    store.hydrateOpenedThread({
+      threadId: 'a',
+      turnsNewestFirst: [],
+      historyCursor: null,
+      readOnlyReason: null,
+      cwd: '/p/a',
+    });
+    store.setOpenStateForThread('a', {
+      openState: 'ready',
+      historyRequest: 'loading',
+    });
+    const router = createRouter({
+      history: createMemoryHistory({ initialEntries: ['/'] }),
+      routeTree: createRootRoute({
+        component: () => (
+          <TooltipProvider>
+            <main className="h-dvh w-full">
+              <ConversationFrame threadId="a" active onRetry={vi.fn()} />
+            </main>
+          </TooltipProvider>
+        ),
+      }),
+    });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    try {
+      const input = await screen.findByRole('textbox');
+      await waitFor(() =>
+        expect(document.querySelector('[data-history-gate]')).toBeNull(),
+      );
+      expect(input).toBeEnabled();
+      expect(
+        screen.queryByText('Send a message to start the conversation.'),
+      ).toBeNull();
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+      fireEvent.change(input, {
+        target: { value: 'Continuer pendant le chargement.' },
+      });
+      await page.getByRole('main').screenshot({
+        path: `../../../.vitest-screenshots/progressive-history-${width}.png`,
+      });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await waitFor(() => expect(calls.start).toHaveBeenCalledTimes(1));
+      expect(store.getThreadRuntime('a')?.historyRequest).toBe('loading');
+      expect(calls.start.mock.calls[0][0]).toMatchObject({
+        path: { threadId: 'a' },
+        body: {
+          input: [{ type: 'text', text: 'Continuer pendant le chargement.' }],
+        },
+      });
+    } finally {
+      view.unmount();
+      network.mockRestore();
+    }
+  },
+);

@@ -11,7 +11,10 @@ import {
 import { useTimelineStore } from '@/stores/timeline-store';
 import { currentObservationSeq } from '@/lib/turn-item-merge';
 import type { ThreadTurnsPageDto } from '@/generated/api';
-import { HISTORY_PAGE_SIZE } from './history-prefetch';
+import {
+  HISTORY_PAGE_SIZE,
+  RECENT_HISTORY_PAGE_SIZE,
+} from './history-prefetch';
 import {
   readTranscriptBookmark,
   readingAnchorTurnId,
@@ -171,7 +174,8 @@ async function recoverTurnLifecycle(
                 path: { threadId },
                 query: {
                   itemsView: 'full',
-                  limit: HISTORY_PAGE_SIZE,
+                  limit:
+                    page === 0 ? RECENT_HISTORY_PAGE_SIZE : HISTORY_PAGE_SIZE,
                   sortDirection: 'desc',
                   cursor: cursor ?? undefined,
                 },

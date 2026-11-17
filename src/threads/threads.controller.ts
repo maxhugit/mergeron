@@ -287,15 +287,23 @@ export class ThreadsController {
     description:
       "Pass false for background reopens (refresh or reconnect recovery) so the tree's active-branch pointer keeps naming what the user last opened.",
   })
+  @ApiQuery({
+    name: 'deferHistory',
+    required: false,
+    type: Boolean,
+    description:
+      'Return turn headers only; fetch full history separately after ownership is confirmed. Defaults to false.',
+  })
   async resumeThread(
     @Param('threadId') threadId: string,
     @Query('recordActive') recordActive?: string,
+    @Query('deferHistory') deferHistory?: string,
   ) {
     // Only an explicit `false` opts out; anything else keeps the default so a
     // caller that forgets the parameter still behaves like a user-initiated open.
     return this.threadsService.resumeThread(threadId, {
       recordActive: recordActive !== 'false',
-      fullHistory: true,
+      fullHistory: deferHistory !== 'true',
     });
   }
 

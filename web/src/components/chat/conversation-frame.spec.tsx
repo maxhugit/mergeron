@@ -76,3 +76,24 @@ it('cannot reactivate a composer or transcript inside a withdrawn agent/session 
     'false',
   );
 });
+
+it('does not cover an owned composer while transcript geometry or its bookmark is still pending', () => {
+  const store = useTimelineStore.getState();
+  store.hydrateOpenedThread({
+    threadId: 'a',
+    turnsNewestFirst: [],
+    historyCursor: null,
+    readOnlyReason: null,
+  });
+  store.setOpenStateForThread('a', {
+    openState: 'ready',
+    historyRequest: 'loading',
+  });
+  const view = render(
+    <ConversationFrame threadId="a" active onRetry={vi.fn()} />,
+  );
+  // The transcript mock never calls onReady: a distant bookmark is still loading.
+  expect(view.container.querySelector('[data-history-gate]')).toBeNull();
+  expect(screen.getByTestId('composer-activity').closest('[inert]')).toBeNull();
+  expect(store.getThreadRuntime('a')?.historyRequest).toBe('loading');
+});

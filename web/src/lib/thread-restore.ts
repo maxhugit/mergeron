@@ -71,7 +71,7 @@ export async function restoreThread(
   try {
     const { data } = await threadsResumeThread({
       path: { threadId },
-      query: { recordActive: false },
+      query: { recordActive: false, deferHistory: true },
       throwOnError: true,
     });
     if (
@@ -80,7 +80,7 @@ export async function restoreThread(
     )
       return;
     // applyOpenResponse already owns policy, lifecycle, item and auxiliary reads.
-    await applyOpenResponse(data, baselineSeq);
+    await applyOpenResponse(data, baselineSeq, undefined, true);
   } catch (error) {
     if (
       currentThreadEpoch(threadId) === epoch &&
