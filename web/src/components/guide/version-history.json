@@ -1,5 +1,57 @@
 [
   {
+    "tag": "v0.8.9",
+    "date": "2026-11-17",
+    "highlights": {
+      "fr": [
+        "Ouverture des conversations longues allégée : les derniers messages se chargent progressivement et l’agent devient utilisable après confirmation de son accès, pendant la récupération de l’historique.",
+        "Vérifications de session ordinaires en arrière-plan : les changements brefs de fenêtre ou d’onglet ne suspendent plus inutilement l’espace de travail. Les contrôles de droits et la reprise après une interruption restent appliqués."
+      ],
+      "en": [
+        "Lighter opening of long conversations: recent messages load progressively and the agent becomes usable once access is confirmed, while history continues loading.",
+        "Routine session checks run in the background: brief window or tab switches no longer unnecessarily suspend the workspace. Access checks and recovery after interruptions remain enforced."
+      ]
+    }
+  },
+  {
+    "tag": "v0.8.8",
+    "date": "2026-11-16",
+    "highlights": {
+      "fr": [
+        "La réouverture d’un agent respecte son dossier de travail actif, même si une ancienne préférence désigne un autre emplacement, pour éviter une reprise bloquée lorsqu’un autre agent travaille."
+      ],
+      "en": [
+        "Reopening an agent respects its active working folder even when an older preference points elsewhere, preventing blocked recovery while another agent is running."
+      ]
+    }
+  },
+  {
+    "tag": "v0.8.7",
+    "date": "2026-11-16",
+    "highlights": {
+      "fr": [
+        "Actions Git et envoi des modifications mieux reliés à chaque copie ; les résultats d’envoi incertains sont vérifiés et les erreurs MCP mieux expliquées.",
+        "Reprise de l’isolation Git fiabilisée après l’affectation ou la réouverture d’une copie, avec maintien des confirmations de permissions natives."
+      ],
+      "en": [
+        "Git actions and pushes are tied more reliably to each copy; uncertain push outcomes are reconciled and MCP errors are explained more clearly.",
+        "More reliable Git isolation recovery after assigning or reopening a copy, while retaining native permission confirmation."
+      ]
+    }
+  },
+  {
+    "tag": "v0.8.6",
+    "date": "2026-11-15",
+    "highlights": {
+      "fr": [
+        "Accès aux consignes et aux copies Git de l’agent depuis la conversation."
+      ],
+      "en": [
+        "Access agent instructions and Git copies from the conversation."
+      ]
+    }
+  },
+  {
     "tag": "v0.8.5",
     "date": "2026-11-15",
     "highlights": {
