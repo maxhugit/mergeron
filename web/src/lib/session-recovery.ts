@@ -82,6 +82,11 @@ const renewalEndpoints = new Map(
 /** Install before React/socket/focus recovery can start protected requests. */
 export function installSessionRecovery() {
   pauseSession();
+  // Age of the last identity check is not evidence that the tab was asleep.
+  // Ordinary focus events must leave a live workspace and socket intact.
+  let backgroundSince: number | null =
+    document.visibilityState === 'hidden' ? Date.now() : null;
+  let networkInterrupted = false;
   const originalFetch = window.fetch;
   window.fetch = async (input, init) => {
     const url = new URL(
@@ -141,12 +146,23 @@ export function installSessionRecovery() {
     // A capture listener on window also sees focus on every descendant input.
     // Those are ordinary in-page interactions, not a return to this tab.
     if (event.type === 'focus' && event.target !== event.currentTarget) return;
+    if (document.visibilityState === 'hidden') {
+      backgroundSince ??= Date.now();
+      return;
+    }
     if (event.type === 'online') recordSessionDiagnostic('online');
+    const returningAfterInactivity =
+      backgroundSince !== null &&
+      Date.now() - Math.max(backgroundSince, verifiedAt) >= 30_000;
+    backgroundSince = null;
     if (
       document.visibilityState === 'visible' &&
       owner !== null &&
-      Date.now() - verifiedAt >= 30_000
+      (returningAfterInactivity ||
+        networkInterrupted ||
+        (event.type === 'pageshow' && (event as PageTransitionEvent).persisted))
     ) {
+      networkInterrupted = false;
       recordSessionDiagnostic('wake', {
         trigger: event.type as
           | 'focus'
@@ -158,13 +174,20 @@ export function installSessionRecovery() {
       pauseSession('wake');
     }
   };
-  const offline = () => recordSessionDiagnostic('offline');
+  const pagehide = () => {
+    backgroundSince ??= Date.now();
+  };
+  const offline = () => {
+    networkInterrupted = true;
+    recordSessionDiagnostic('offline');
+  };
   const expired = () => pauseSession();
   for (const name of ['focus', 'pageshow', 'online'])
     window.addEventListener(name, wake, true);
   document.addEventListener('visibilitychange', wake, true);
   window.addEventListener('codex-webui:auth-expired', expired, true);
   window.addEventListener('offline', offline);
+  window.addEventListener('pagehide', pagehide, true);
   return () => {
     window.fetch = originalFetch;
     for (const name of ['focus', 'pageshow', 'online'])
@@ -172,6 +195,7 @@ export function installSessionRecovery() {
     document.removeEventListener('visibilitychange', wake, true);
     window.removeEventListener('codex-webui:auth-expired', expired, true);
     window.removeEventListener('offline', offline);
+    window.removeEventListener('pagehide', pagehide, true);
     owner = null;
     verifiedAt = 0;
     paused = false;

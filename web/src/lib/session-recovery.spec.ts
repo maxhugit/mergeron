@@ -94,7 +94,11 @@ it.each([
 it('closes the gate on idle return before other focus handlers can submit a mutation', async () => {
   vi.useFakeTimers();
   acceptVerifiedSession(identity);
+  const visibility = vi.spyOn(document, 'visibilityState', 'get');
+  visibility.mockReturnValue('hidden');
+  document.dispatchEvent(new Event('visibilitychange'));
   vi.advanceTimersByTime(31_000);
+  visibility.mockReturnValue('visible');
   let attempt: Promise<Response> | undefined;
   const other = () => {
     attempt = fetch('/api/projects', { method: 'POST' });
@@ -189,4 +193,43 @@ it('does not interfere with external or static resources', async () => {
   await fetch('https://example.test/api/resource');
   await fetch('/assets/file.js');
   expect(network).toHaveBeenCalledTimes(2);
+});
+
+it('keeps a live workspace open on ordinary window focus even when its last check is old', async () => {
+  vi.useFakeTimers();
+  acceptVerifiedSession(identity);
+  vi.advanceTimersByTime(180_000);
+  window.dispatchEvent(new Event('focus'));
+  expect(isSessionPaused()).toBe(false);
+  await fetch('/api/projects');
+  expect(network).toHaveBeenCalledOnce();
+});
+
+it('does not confuse a short tab switch with the age of its last verification', () => {
+  vi.useFakeTimers();
+  acceptVerifiedSession(identity);
+  vi.advanceTimersByTime(180_000);
+  const visibility = vi.spyOn(document, 'visibilityState', 'get');
+  visibility.mockReturnValue('hidden');
+  document.dispatchEvent(new Event('visibilitychange'));
+  vi.advanceTimersByTime(1_000);
+  visibility.mockReturnValue('visible');
+  document.dispatchEvent(new Event('visibilitychange'));
+  window.dispatchEvent(new Event('focus'));
+  expect(isSessionPaused()).toBe(false);
+});
+
+it('requires verification after a real network interruption even with a fresh identity', () => {
+  acceptVerifiedSession(identity);
+  window.dispatchEvent(new Event('offline'));
+  window.dispatchEvent(new Event('online'));
+  expect(isSessionPaused()).toBe(true);
+});
+
+it('requires verification after a document is restored from the back-forward cache', () => {
+  acceptVerifiedSession(identity);
+  const restored = new Event('pageshow');
+  Object.defineProperty(restored, 'persisted', { value: true });
+  window.dispatchEvent(restored);
+  expect(isSessionPaused()).toBe(true);
 });

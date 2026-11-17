@@ -171,8 +171,14 @@ export function applyOpenResponse(
   response: ThreadOpenResponseDto,
   baselineSeq: number = -1,
   joined?: Promise<boolean>,
+  deferHistory = false,
 ): Promise<void> {
-  assertFullHistoryPage(response.initialTurnsPage);
+  // Summary pages establish lifecycle/ownership, never transcript completeness.
+  // Existing callers still require full history unless they explicitly opt in.
+  const headersOnly =
+    deferHistory &&
+    response.initialTurnsPage.data.some((turn) => turn.itemsView === 'summary');
+  if (!headersOnly) assertFullHistoryPage(response.initialTurnsPage);
   const store = useTimelineStore.getState();
   const threadId = response.thread.id;
 
@@ -187,8 +193,10 @@ export function applyOpenResponse(
   store.setThreadTitleForThread(threadId, threadLabel(response.thread));
   store.hydrateOpenedThread({
     threadId,
-    turnsNewestFirst: response.initialTurnsPage.data,
-    historyCursor: response.initialTurnsPage.nextCursor,
+    turnsNewestFirst: headersOnly ? [] : response.initialTurnsPage.data,
+    historyCursor: headersOnly
+      ? (store.getThreadRuntime(threadId)?.historyCursor ?? null)
+      : response.initialTurnsPage.nextCursor,
     readOnlyReason:
       response.mode === 'readOnly'
         ? (response.ownershipRefusalMessage ?? '')
@@ -198,9 +206,19 @@ export function applyOpenResponse(
   store.setThreadStatusForThread(threadId, response.thread.status);
   // The first hook read can precede resume and report observed:false. Opening
   // (including restart recovery) is the point at which settings are available.
-  const policy = refreshThreadPolicy(threadId).then(() =>
-    settleIfObserved(threadId),
-  );
+  const epoch = currentThreadEpoch(threadId);
+  store.setOpenStateForThread(threadId, { historyRequest: 'loading' });
+  const policy = refreshThreadPolicy(threadId).then(() => {
+    if (
+      epoch !== currentThreadEpoch(threadId) ||
+      !store.getThreadRuntime(threadId)
+    )
+      return;
+    settleIfObserved(threadId);
+    // Native resume has confirmed ownership and its exact permission profile.
+    // Historical reads and bookmark restoration must not hold the composer.
+    store.setOpenStateForThread(threadId, { openState: 'ready' });
+  });
 
   // Seed the composer's display-only view of this thread's resolved settings.
   // `thread/settings/updated` only fires when settings change, so without this
@@ -255,8 +273,7 @@ export function applyOpenResponse(
   }
 
   // A room acknowledgement closes the HTTP/socket opening gap. Read full
-  // history after it and reconcile live observations before the cold reveal.
-  const epoch = currentThreadEpoch(threadId);
+  // history after it and reconcile live observations in the background.
   const repair = (joined ?? Promise.resolve(false)).then(
     async (acknowledged) => {
       if (
@@ -268,7 +285,7 @@ export function applyOpenResponse(
       // page after it; an HTTP-only open can still repair its returned page.
       const complete = await recoverThreadAfterReconnect(
         threadId,
-        acknowledged ? undefined : response.initialTurnsPage,
+        acknowledged || headersOnly ? undefined : response.initialTurnsPage,
         baselineSeq,
       );
       if (!complete && epoch === currentThreadEpoch(threadId))
@@ -307,7 +324,7 @@ export function useOpenThread() {
   const { t } = useTranslation();
 
   return useMutation({
-    ...threadsResumeThreadMutation(),
+    ...threadsResumeThreadMutation({ query: { deferHistory: true } }),
     onMutate: (variables) => {
       const threadId = variables.path.threadId;
       const store = useTimelineStore.getState();
@@ -360,6 +377,7 @@ export function useOpenThread() {
         response,
         context?.baselineSeq,
         context.joined,
+        true,
       );
       invalidateThreadDetails(queryClient, response.thread.id);
       if (response.mode === 'readOnly') {

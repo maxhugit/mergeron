@@ -1,7 +1,7 @@
 /** Read-only, bounded warm-up. Never resumes an agent or claims writer ownership. */
 import type { QueryClient } from '@tanstack/react-query';
 import { threadsListTurns, threadsReadThread } from '@/generated/api/sdk.gen';
-import { HISTORY_PAGE_SIZE } from './history-prefetch';
+import { RECENT_HISTORY_PAGE_SIZE } from './history-prefetch';
 import { assertFullHistoryPage } from './full-history';
 import type {
   ThreadReadResponseDto,
@@ -49,7 +49,7 @@ export async function prefetchAgentNavigation(
           const page = await threadsListTurns({
             path: { threadId },
             query: {
-              limit: HISTORY_PAGE_SIZE,
+              limit: RECENT_HISTORY_PAGE_SIZE,
               sortDirection: 'desc',
               itemsView: 'full',
             },

@@ -12,6 +12,7 @@ describe('ThreadsController rich input validation', () => {
     listLoadedThreads: vi.fn(),
     listOverview: vi.fn(),
     forkThread: vi.fn(),
+    resumeThread: vi.fn(),
   };
   const filesService = {
     resolveSafePath: vi.fn(),
@@ -42,6 +43,24 @@ describe('ThreadsController rich input validation', () => {
       filesService as never,
       chatUploadService as never,
     );
+  });
+
+  it('preserves full history by default and defers it only by explicit request', async () => {
+    await controller.resumeThread('thread1');
+    expect(threadsService.resumeThread).toHaveBeenLastCalledWith('thread1', {
+      recordActive: true,
+      fullHistory: true,
+    });
+    await controller.resumeThread('thread1', 'false', 'true');
+    expect(threadsService.resumeThread).toHaveBeenLastCalledWith('thread1', {
+      recordActive: false,
+      fullHistory: false,
+    });
+    await controller.resumeThread('thread1', undefined, 'anything');
+    expect(threadsService.resumeThread).toHaveBeenLastCalledWith('thread1', {
+      recordActive: true,
+      fullHistory: true,
+    });
   });
 
   it('lists loaded thread ids with pagination params', async () => {

@@ -372,6 +372,26 @@ test.each([390, 1180])(
         target: { value: 'La saisie ne ferme pas la session.' },
       });
       expect(input).toHaveValue('La saisie ne ferme pas la session.');
+      let finish!: (response: Response) => void;
+      network.mockReturnValueOnce(
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+      );
+      act(() => window.dispatchEvent(new Event('focus')));
+      await waitFor(() => expect(finish).toBeTypeOf('function'));
+      expect(isSessionPaused()).toBe(false);
+      expect(screen.getByRole('textbox')).toBe(input);
+      expect(input).toBeVisible();
+      expect(screen.queryByRole('status')).toBeNull();
+      await act(async () => {
+        finish(
+          new Response(JSON.stringify(identity), {
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      });
+      expect(input).toHaveValue('La saisie ne ferme pas la session.');
     } finally {
       view.unmount();
       client.clear();
@@ -428,6 +448,7 @@ test.each([390, 1180])(
       scroll.scrollTop = 320;
       const href = window.location.href;
       pending = true;
+      window.dispatchEvent(new Event('pagehide'));
       clock += 31_000;
       const before = network.mock.calls.length;
       act(() => {

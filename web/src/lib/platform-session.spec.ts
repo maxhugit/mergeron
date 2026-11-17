@@ -196,6 +196,7 @@ describe('platform session recovery', () => {
     });
     network.mockClear();
     visibility.mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(31_000);
     });
@@ -291,7 +292,9 @@ describe('platform session recovery', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_000);
     });
-    act(() => window.dispatchEvent(new Event('focus')));
+    const restored = new Event('pageshow');
+    Object.defineProperty(restored, 'persisted', { value: true });
+    act(() => window.dispatchEvent(restored));
     expect(network).toHaveBeenCalledTimes(2);
     expect(oldSignal?.aborted).toBe(true);
     expect(isSessionPaused()).toBe(true);

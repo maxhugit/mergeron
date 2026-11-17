@@ -36,7 +36,8 @@ export function useAgentNavigationPrefetch(
   const ids = useAgentViewCacheStore((state) => state.threadIds);
   const activeReady = useTimelineStore((state) =>
     activeThreadId
-      ? state.threadsById[activeThreadId]?.openState === 'ready'
+      ? state.threadsById[activeThreadId]?.openState === 'ready' &&
+        state.threadsById[activeThreadId]?.historyRequest !== 'loading'
       : true,
   );
   const verified =

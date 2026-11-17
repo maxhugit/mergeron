@@ -281,15 +281,18 @@ export function ChatTimeline({
             />
           )}
         />
-        {ready && timeline.length === 0 && (
-          <div
-            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-sm text-muted-foreground"
-            style={{ paddingBottom: bottomInset }}
-          >
-            <Bot className="mb-4 h-10 w-10 opacity-30" />
-            {t('sendAMessageToStartTheConversation')}
-          </div>
-        )}
+        {ready &&
+          timeline.length === 0 &&
+          runtime?.historyRequest !== 'loading' &&
+          !runtime?.historyError && (
+            <div
+              className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-sm text-muted-foreground"
+              style={{ paddingBottom: bottomInset }}
+            >
+              <Bot className="mb-4 h-10 w-10 opacity-30" />
+              {t('sendAMessageToStartTheConversation')}
+            </div>
+          )}
       </div>
 
       <AlertDialog

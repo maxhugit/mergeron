@@ -1,5 +1,8 @@
-/** Number of full turns requested by opening, recovery and older-history paging. */
+/** Number of full turns requested by older-history and catch-up pages. */
 export const HISTORY_PAGE_SIZE = 20;
+
+/** Keep the first visible/recovery window small; older turns remain pageable. */
+export const RECENT_HISTORY_PAGE_SIZE = 2;
 
 /** Decides when approaching the top of a transcript should fetch older history. */
 

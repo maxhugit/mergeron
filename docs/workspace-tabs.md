@@ -68,7 +68,7 @@ list. Transcripts, drafts and credentials are never written by this preference.
 `AgentWorkspaceHost`, outside the route outlet, retains up to five recently
 visited agent workspaces from that project in an LRU. After reload, the selected
 conversation opens first. Once ready, the client reads one full recent history
-page (20 turns) for up to four other recent agents, sequentially. A first visit
+page (2 turns) for up to four other recent agents, sequentially. A first visit
 without recent IDs selects at most four unarchived agents from the project list.
 The project resource page code is warmed without mounting those pages or starting
 their actions. It never preloads the entire project. The current view outside
@@ -143,13 +143,19 @@ and use these same document/attachment owners.
 
 ## History readiness and controls
 
-Foreground opens request the current first-page size (20 turns) with full items.
+Foreground opens first confirm ownership using metadata and summary turn headers,
+then request the latest two full turns in the background. Older-history pages
+remain 20 full turns, with their original cursors. No summary authorizes sending
+or substitutes for full item coverage.
 Summary/not-loaded responses never qualify for presentation. A valid empty page,
 a short exhausted page, and a full page with an older-turn cursor are distinct
 from failed or incomplete reads. A running turn can have valid full persisted
 items without being finished.
 
-The loading gate is a sibling overlay outside the Conversation scroller. Header,
+The loading gate is a sibling overlay outside the Conversation scroller. After
+ownership/profile confirmation and policy refresh, it releases the composer
+while a banner reports background history loading or failure. Auxiliary reads
+and bookmark recovery no longer delay sending. Header,
 view controls, and remembered file/terminal views remain usable while it loads.
 The initial response is reconciled with live observations; an acknowledged room
 join triggers a fresh full read to cover the HTTP/socket gap. Covered turns reuse
@@ -157,8 +163,8 @@ that full page, with no per-row enrichment requests.
 
 Turns the pages did not cover are read individually, four at a time, on two
 different footings. A turn holding an unterminated item or plan fragment — or the
-one believed to be running — is visibly wrong until repaired, so it blocks the
-reveal and its failure is reported as an incomplete recovery. A retained
+one believed to be running — requires repair and its failure is reported as
+an incomplete recovery. It does not block the already-owned composer. A retained
 _completed_ turn is only swept for late sub-agent items, which attach after their
 parent's `turn/completed`; nothing marks such a turn as swept, so an unbounded
 sweep would be re-issued in full on every reconnect and would grow with every

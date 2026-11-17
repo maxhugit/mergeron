@@ -75,10 +75,13 @@ réarmées automatiquement et la console Docker reste une autorité privilégié
 ## Reprise de session
 
 La reprise après inactivité ne recharge pas l’onglet de travail et ne réutilise
-pas une identité en cache pour donner accès. Pendant la vérification, l’interface
-est masquée et les appels API protégés et le socket sont suspendus sans rejouer
+pas une identité en cache pour donner accès. Pendant une reprise nécessitant une
+vérification, l’interface est masquée et les appels API protégés et le socket sont suspendus sans rejouer
 les écritures. Une reconnexion séparée exige une nouvelle vérification serveur
-du compte, du rôle et du contexte de test de droits d’origine. Voir le
+du compte, du rôle et du contexte de test de droits d’origine. Les vérifications
+périodiques et retours brefs d’un onglet actif ne suspendent pas l’interface ;
+un refus ou échec de vérification la suspend toujours. Les API restent
+authentifiées côté serveur à chaque appel. Voir le
 [parcours de reprise et ses limites](docs/session-recovery.md).
 
 ## Contrôles de l’image publiée
