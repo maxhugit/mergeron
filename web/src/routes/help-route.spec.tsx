@@ -25,7 +25,7 @@ it('opens and translates the published version timeline without changing its sta
     name: 'Published release timeline',
   });
   expect(within(timeline).getAllByRole('heading')[0]).toHaveTextContent(
-    'v0.8.5',
+    'v0.8.9',
   );
   expect(
     within(timeline).getByRole('heading', { name: 'v0.1.0' }),
