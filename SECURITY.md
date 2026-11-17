@@ -250,3 +250,11 @@ Le Manager doit fournir un relevé de moins d’une minute avec Docker joignable
 et observer une application gérée, autorisée et saine avec l’identité
 d’image exacte du registre. Une CI verte, une étiquette de version ou un reçu
 fourni par l’agent ne suffisent pas. Ce lecteur ne lance aucun pull ou déploiement.
+
+## Budget des outils MCP internes
+
+Le budget est borné par tour : 1 000 appels par défaut, configurable entre 100 et
+10 000 avec `MERGERON_MCP_CALLS_PER_TURN` dans le backend. Il est capturé au
+début du tour, puis conservé avec le compteur lors des renouvellements. Ce
+réglage n’augmente ni les droits, ni la durée de validité, ni la concurrence
+des lectures GitHub, et ne contourne aucun quota du fournisseur.

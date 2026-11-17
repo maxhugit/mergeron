@@ -930,7 +930,7 @@
             "title": "Administrator reference",
             "paragraphs": [
               "Settings → Internal MCP lists methods, parameters, examples and permission rules from the server catalogue. This reference is not an execution console and grants no additional rights.",
-              "These tools are available to linked work agents;"
+              "These tools are available to linked work agents. The internal MCP budget defaults to 1,000 calls per turn, including GitHub tools. RATE_LIMIT indicates this internal ceiling; GIT_GITHUB_RATE_LIMIT indicates a limit imposed by GitHub. Renewing authorization does not reset the counter."
             ]
           },
           {
