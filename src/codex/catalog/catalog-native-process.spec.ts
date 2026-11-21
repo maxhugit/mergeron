@@ -1,7 +1,8 @@
 /** Native process resource bounds and argument isolation without launching a real subprocess. */
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   CatalogNativeService,
   CATALOG_MAX_BYTES,
@@ -76,6 +77,45 @@ describe('bounded native catalog subprocess', () => {
     child.emit('close', 0);
     await result;
     expect(existsSync(args[2].env.CODEX_HOME)).toBe(false);
+  });
+  it('delegates only access credentials, preserving the managed auth file byte for byte', async () => {
+    const auth = JSON.stringify({
+      auth_mode: 'chatgpt',
+      tokens: {
+        id_token: 'identity',
+        access_token: 'access',
+        account_id: 'account',
+        refresh_token: 'rotation-secret',
+      },
+      last_refresh: '2020-01-01T00:00:00Z',
+      extra_secret: 'never-delegate',
+    });
+    writeFileSync(join(fixture.home, 'auth.json'), auth);
+    const result = native.effective();
+    await started;
+    const options = mocks.spawn.mock.calls[0][2] as {
+      env: { CODEX_HOME: string };
+    };
+    const snapshot = readFileSync(
+      join(options.env.CODEX_HOME, 'auth.json'),
+      'utf8',
+    );
+    expect(JSON.parse(snapshot)).toEqual({
+      auth_mode: 'chatgptAuthTokens',
+      tokens: {
+        id_token: 'identity',
+        access_token: 'access',
+        account_id: 'account',
+        refresh_token: '',
+      },
+    });
+    expect(snapshot).not.toContain('rotation-secret');
+    expect(snapshot).not.toContain('never-delegate');
+    child.stdout.write(draftCatalog);
+    child.emit('close', 0);
+    await result;
+    expect(readFileSync(join(fixture.home, 'auth.json'), 'utf8')).toBe(auth);
+    expect(existsSync(options.env.CODEX_HOME)).toBe(false);
   });
   it('reports executable errors and invalid output without publishing anything', async () => {
     const result = native.bundled();

@@ -2528,7 +2528,8 @@
               "Open Settings → Codex → Account to sign in to ChatGPT with a device code, or switch accounts.",
               "Choose models, reasoning, instructions and security in their configuration tabs.",
               "Use Save and Cancel changes in the active panel. These actions remain at the bottom of that panel; switching a subtab does not save or restart anything.",
-              "For a custom catalog, distinguish saving its draft from applying it with restart, and check inactivity before confirming."
+              "For a custom catalog, distinguish saving its draft from applying it with restart, and check inactivity before confirming.",
+              "Reading the model catalog does not refresh the session from a temporary profile: the main Codex server owns token renewal. An already revoked token requires signing in again under Account."
             ]
           },
           {

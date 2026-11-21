@@ -48,3 +48,14 @@ vulnérabilités critiques corrigibles sont conservés.
 
 Voir la [politique de sécurité](../SECURITY.md) et
 les [composants système](system-components.md).
+
+## OpenSSL partagé du Manager
+
+Le paquet Debian `libssl3t64` 3.5.7-1~deb13u3 est retiré de l’image Manager
+pour CVE-2026-124709 (QUIC), sans exception de scan. Node utilise son OpenSSL
+embarqué ; le retrait vérifie les objets partagés chargés, l’inventaire exact
+et l’absence d’alias avant toute suppression. Un processus Node neuf teste
+ensuite cryptographie et contexte TLS. Les fichiers des bibliothèques et
+l’inventaire dpkg sont supprimés ensemble, comme pour zlib.
+Voir le [suivi Debian](https://security-tracker.debian.org/tracker/CVE-2026-124709)
+et le [correctif borné](../scripts/prune-manager-openssl.mjs).

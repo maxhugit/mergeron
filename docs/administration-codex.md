@@ -434,3 +434,28 @@ Le [paramétrage des consignes des agents](consignes-agents.md) permet maintenan
 d’associer explicitement une copie Git indépendamment du dossier actif, de définir
 les préférences personnelles et de consulter les versions vérifiées ou fournies.
 
+
+## Session OAuth et lecture du catalogue de modèles
+
+La lecture du catalogue effectif utilise un profil temporaire. Ce lecteur reçoit
+uniquement un instantané du jeton d’accès et de l’identité ChatGPT, en mode natif
+`chatgptAuthTokens`, sans jeton de renouvellement. Il ne peut donc pas renouveler
+la session depuis une copie jetable. Le serveur Codex principal reste responsable
+du renouvellement et de sa persistance dans le profil géré. La session originale
+et son cache ne sont pas modifiés par cette lecture. Un jeton déjà révoqué exige
+une reconnexion dans **Paramètres → Codex → Compte** ; ce correctif ne le réactive pas.
+
+Le défaut précédent copiait `auth.json` intégralement avant `codex debug models`.
+Cette commande peut consulter le réseau si son cache manque ou est périmé et
+renouveler une session expirée. Une rotation enregistrée uniquement dans le profil
+temporaire pouvait laisser le serveur principal avec l’ancien jeton. Le test de
+régression utilise un serveur OAuth local et des identifiants synthétiques pour
+vérifier l’absence de renouvellement et la conservation du fichier original.
+Ce mécanisme est reproductible ; les journaux de révocation seuls ne permettent
+pas d’attribuer rétrospectivement chaque incident à cette cause.
+
+La validation de cette correction a aussi révélé CVE-2026-124709 dans le paquet
+Debian OpenSSL inutilisé de l’image Manager. L’image retire ses fichiers réels
+et leur inventaire après vérification que Node ne les charge pas. Un nouveau
+processus vérifie ensuite SHA-256, l’aléatoire et la création d’un contexte TLS.
+Le scan de vulnérabilités reste obligatoire, sans exception pour cette CVE.
