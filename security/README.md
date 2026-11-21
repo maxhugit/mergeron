@@ -38,7 +38,7 @@ conditions indiquées ; elle ne vaut pas garantie pour toute version future.
 Ne pas retirer un correctif ou une évaluation sans vérifier ses consommateurs,
 le composant construit et les tests correspondants.
 
-L’image finale actualise `linux-libc-dev` et exige au minimum `6.12.115-2`,
+L’image finale actualise `linux-libc-dev` et exige au minimum `6.12.117-1`,
 version corrigée pour [CVE-2026-99083](https://security-tracker.debian.org/tracker/CVE-2026-99083).
 Ce rafraîchissement reste indépendant du cache des étapes lourdes de compilation.
 Le test de l’image vérifie cette borne, l’inventaire des en-têtes et la compilation
@@ -59,3 +59,10 @@ ensuite cryptographie et contexte TLS. Les fichiers des bibliothèques et
 l’inventaire dpkg sont supprimés ensemble, comme pour zlib.
 Voir le [suivi Debian](https://security-tracker.debian.org/tracker/CVE-2026-124709)
 et le [correctif borné](../scripts/prune-manager-openssl.mjs).
+
+Le minimum `6.12.117-1` inclut le correctif Debian de
+[CVE-2026-99362](https://security-tracker.debian.org/tracker/CVE-2026-99362),
+qui bloquait la publication après la PR 522. Le contrôle de version est appliqué
+à la construction et revérifié dans l’image. Aucun filtre de vulnérabilité ni
+extension OpenVEX n’est ajouté. Cette mise à jour du paquet d’en-têtes ne met
+pas à jour le noyau de l’hôte Docker.

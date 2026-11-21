@@ -12,7 +12,7 @@ def run(*args):
 
 version = run("dpkg-query", "-W", "-f=${Version}", "linux-libc-dev")
 subprocess.run(
-    ["dpkg", "--compare-versions", version, "ge", "6.12.115-2"],
+    ["dpkg", "--compare-versions", version, "ge", "6.12.117-1"],
     check=True, timeout=60,
 )
 headers = 0

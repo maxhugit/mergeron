@@ -323,8 +323,8 @@ RUN --mount=type=cache,id=visual-runtime-base-apt-archives,target=/var/cache/apt
 FROM visual-runtime-base AS runtime
 
 # Refresh this package even when the expensive runtime/toolchain base is cached.
-# Debian fixes CVE-2026-99083 in 6.12.115-2; retain all scan findings and gates.
-ARG LINUX_LIBC_DEV_MIN_VERSION=6.12.115-2
+# Debian fixes CVE-2026-99362 in 6.12.117-1 (also retains the CVE-2026-99083 fix); retain all scan findings and gates.
+ARG LINUX_LIBC_DEV_MIN_VERSION=6.12.117-1
 RUN --mount=type=cache,id=runtime-apt-archives,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=runtime-apt-lists,target=/var/lib/apt,sharing=locked \
     apt-get update \
