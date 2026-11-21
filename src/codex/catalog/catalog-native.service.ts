@@ -49,6 +49,37 @@ export function parseCatalog(content: string): ModelCatalog {
   return value as ModelCatalog;
 }
 
+/** A disposable catalog reader must never rotate the managed session's refresh token. */
+export function catalogAuthSnapshot(content: string): string {
+  const auth = JSON.parse(content) as {
+    auth_mode?: string;
+    OPENAI_API_KEY?: string | null;
+    tokens?: { id_token?: string; access_token?: string; account_id?: string };
+  };
+  if (
+    auth.tokens &&
+    (auth.auth_mode === undefined ||
+      auth.auth_mode === 'chatgpt' ||
+      auth.auth_mode === 'chatgptAuthTokens')
+  ) {
+    return JSON.stringify({
+      auth_mode: 'chatgptAuthTokens',
+      tokens: {
+        id_token: auth.tokens.id_token,
+        access_token: auth.tokens.access_token,
+        account_id: auth.tokens.account_id,
+        refresh_token: '',
+      },
+    });
+  }
+  // API-key authentication has no rotating session. Unknown modes are not delegated.
+  return JSON.stringify(
+    auth.OPENAI_API_KEY
+      ? { auth_mode: 'apikey', OPENAI_API_KEY: auth.OPENAI_API_KEY }
+      : {},
+  );
+}
+
 @Injectable()
 export class CatalogNativeService {
   constructor(private readonly paths: CatalogPathsService) {}
@@ -66,6 +97,9 @@ export class CatalogNativeService {
       for (const name of ['config.toml', 'models_cache.json', 'auth.json']) {
         try {
           let content = await readFile(join(this.paths.home, name), 'utf8');
+          if (name === 'auth.json') {
+            content = catalogAuthSnapshot(content);
+          }
           if (name === 'config.toml') {
             const pointer = catalogPointer(content);
             if (pointer)

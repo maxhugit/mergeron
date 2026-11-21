@@ -2528,7 +2528,8 @@
               "Ouvrez Paramètres → Codex → Compte pour vous connecter à ChatGPT avec le code d’appareil, ou pour changer de compte.",
               "Dans les onglets de configuration, choisissez modèles, raisonnement, instructions et sécurité selon les besoins.",
               "Utilisez les actions Enregistrer et Annuler les modifications du panneau actif. Elles restent en bas de ce panneau ; changer de sous-onglet ne lance ni enregistrement ni redémarrage.",
-              "Pour un catalogue personnalisé, distinguez l’enregistrement du brouillon de son application avec redémarrage ; contrôlez l’inactivité avant confirmation."
+              "Pour un catalogue personnalisé, distinguez l’enregistrement du brouillon de son application avec redémarrage ; contrôlez l’inactivité avant confirmation.",
+              "La lecture du catalogue de modèles ne renouvelle pas la session depuis un profil temporaire : seul le serveur Codex principal gère ce renouvellement. Un jeton déjà révoqué nécessite une reconnexion dans Compte."
             ]
           },
           {

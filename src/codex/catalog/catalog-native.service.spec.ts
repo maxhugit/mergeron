@@ -80,6 +80,50 @@ describe('pinned catalog parser and lifecycle', () => {
     expect(parseCatalog(await native.effective()).models).toHaveLength(11);
     expect(readFileSync(cache, 'utf8')).toBe(original);
   }, 25_000);
+  it('cannot refresh a copied managed session, even with expired access credentials', async () => {
+    let refreshRequests = 0;
+    const provider = createServer((request, response) => {
+      if (request.url === '/oauth/token') refreshRequests++;
+      response.writeHead(401, { 'content-type': 'application/json' });
+      response.end('{"error":{"code":"refresh_token_invalidated"}}');
+    });
+    await new Promise<void>((done) => provider.listen(0, '127.0.0.1', done));
+    const port = (provider.address() as AddressInfo).port;
+    const jwt = (claims: object) =>
+      `e30.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.synthetic`;
+    const auth = JSON.stringify({
+      auth_mode: 'chatgpt',
+      tokens: {
+        id_token: jwt({
+          'https://api.openai.com/auth': { chatgpt_account_id: 'catalog-test' },
+        }),
+        access_token: jwt({ exp: 1 }),
+        refresh_token: 'synthetic-refresh-never-send',
+        account_id: 'catalog-test',
+      },
+      last_refresh: '2020-01-01T00:00:00Z',
+    });
+    writeFileSync(join(fixture.home, 'auth.json'), auth);
+    writeAtomic(
+      fixture.paths.configFile,
+      `chatgpt_base_url = "http://127.0.0.1:${port}"\n`,
+    );
+    vi.stubEnv(
+      'CODEX_REFRESH_TOKEN_URL_OVERRIDE',
+      `http://127.0.0.1:${port}/oauth/token`,
+    );
+    try {
+      expect(
+        parseCatalog(await native.effective()).models.length,
+      ).toBeGreaterThan(0);
+      expect(refreshRequests).toBe(0);
+      expect(readFileSync(join(fixture.home, 'auth.json'), 'utf8')).toBe(auth);
+    } finally {
+      vi.unstubAllEnvs();
+      provider.closeAllConnections();
+      await new Promise<void>((done) => provider.close(() => done()));
+    }
+  }, 25_000);
   it('aborts pending activation before spawn and checks real idle/unmaterialized thread RPCs', async () => {
     const old = fixture.storage.candidatePath();
     writeAtomic(old, baseline);
