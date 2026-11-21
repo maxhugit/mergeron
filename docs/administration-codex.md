@@ -453,3 +453,9 @@ régression utilise un serveur OAuth local et des identifiants synthétiques pou
 vérifier l’absence de renouvellement et la conservation du fichier original.
 Ce mécanisme est reproductible ; les journaux de révocation seuls ne permettent
 pas d’attribuer rétrospectivement chaque incident à cette cause.
+
+La validation de cette correction a aussi révélé CVE-2026-124709 dans le paquet
+Debian OpenSSL inutilisé de l’image Manager. L’image retire ses fichiers réels
+et leur inventaire après vérification que Node ne les charge pas. Un nouveau
+processus vérifie ensuite SHA-256, l’aléatoire et la création d’un contexte TLS.
+Le scan de vulnérabilités reste obligatoire, sans exception pour cette CVE.

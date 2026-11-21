@@ -55,6 +55,11 @@ COPY scripts/prune-manager-zlib.mjs /tmp/prune-manager-zlib.mjs
 RUN ["/nodejs/bin/node", "--input-type=module", "-e", "import {pruneManagerZlib} from '/tmp/prune-manager-zlib.mjs'; import {unlinkSync} from 'node:fs'; console.log(JSON.stringify(pruneManagerZlib())); unlinkSync('/tmp/prune-manager-zlib.mjs');"]
 RUN ["/nodejs/bin/node", "--input-type=module", "-e", "import assert from 'node:assert/strict'; import {existsSync} from 'node:fs'; import {gzipSync,gunzipSync} from 'node:zlib'; assert(!existsSync('/usr/lib/x86_64-linux-gnu/libz.so.1')); assert(!existsSync('/usr/lib/x86_64-linux-gnu/libz.so.1.3.1')); assert(!existsSync('/var/lib/dpkg/status.d/zlib1g')); assert.equal(gunzipSync(gzipSync('manager-runtime-compression')).toString(),'manager-runtime-compression');"]
 
+# Node embeds OpenSSL; remove unused Debian QUIC code (CVE-2026-124709).
+COPY scripts/prune-manager-openssl.mjs /tmp/prune-manager-openssl.mjs
+RUN ["/nodejs/bin/node", "--input-type=module", "-e", "import {pruneManagerOpenSsl} from '/tmp/prune-manager-openssl.mjs'; import {unlinkSync} from 'node:fs'; console.log(JSON.stringify(pruneManagerOpenSsl())); unlinkSync('/tmp/prune-manager-openssl.mjs');"]
+RUN ["/nodejs/bin/node", "--input-type=module", "-e", "import assert from 'node:assert/strict'; import {existsSync} from 'node:fs'; import {createHash,randomBytes} from 'node:crypto'; import {createSecureContext,getCiphers} from 'node:tls'; assert(!existsSync('/usr/lib/x86_64-linux-gnu/libssl.so.3')); assert(!existsSync('/usr/lib/x86_64-linux-gnu/libcrypto.so.3')); assert(!existsSync('/var/lib/dpkg/status.d/libssl3t64')); assert.equal(createHash('sha256').update('probe').digest('hex'),'ba9c736f19e7f60b7f6764adb0b7908c0a2b394e09b6c09863528c7f2bc86095'); assert.equal(randomBytes(32).length,32); createSecureContext(); assert(getCiphers().length>0);"]
+
 ARG MERGERON_VERSION=unknown
 ARG MERGERON_REVISION=unknown
 ARG MERGERON_BUILD_DATE=unknown
