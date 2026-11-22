@@ -418,7 +418,7 @@ test('launcher gives each Core process private writable caches outside sources a
           launcher,
           process.execPath,
           '-e',
-          'console.log(JSON.stringify({env:process.env,args:process.argv.slice(1),pid:process.pid}))',
+          'console.log(JSON.stringify({env:process.env,args:process.argv.slice(1),pid:process.pid,cpus:require("node:os").availableParallelism()}))',
           '--',
           'argument with spaces',
           ';not-a-command',
@@ -437,6 +437,9 @@ test('launcher gives each Core process private writable caches outside sources a
     assert.equal(first.status, 0, first.stderr);
     const a = JSON.parse(first.stdout),
       b = JSON.parse(runLauncher().stdout);
+    if (process.platform === 'linux') assert.ok(a.cpus <= 2);
+    assert.equal(a.env.CARGO_BUILD_JOBS, '2');
+    assert.equal(a.env.RAYON_NUM_THREADS, '2');
     assert.equal(a.pid, first.pid); // exec preserves direct signal ownership.
     assert.deepEqual(a.args, ['argument with spaces', ';not-a-command']);
     assert.equal(a.env.npm_config_nodedir, '/explicit/headers');

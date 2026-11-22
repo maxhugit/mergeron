@@ -50,4 +50,21 @@ if [[ -z "${npm_config_nodedir:-}" ]]; then
   ')"
   if [[ -n "$node_root" ]]; then export npm_config_nodedir="$node_root"; fi
 fi
+# Limit CPU discovery for agent descendants only. Test runners otherwise see
+# the host CPU count and can start dozens of workers in an 8 GiB container.
+agent_cpu_count="${MERGERON_AGENT_CPU_COUNT:-2}"
+if [[ ! "$agent_cpu_count" =~ ^[1-8]$ ]]; then
+  echo 'MERGERON_AGENT_CPU_COUNT_INVALID' >&2; exit 65
+fi
+if [[ -r /proc/self/status ]]; then
+  /usr/bin/python3 - "$BASHPID" "$agent_cpu_count" <<'PYCPU'
+import os, sys
+allowed = sorted(os.sched_getaffinity(0))
+os.sched_setaffinity(int(sys.argv[1]), allowed[:int(sys.argv[2])])
+PYCPU
+fi
+export CMAKE_BUILD_PARALLEL_LEVEL="$agent_cpu_count"
+export CARGO_BUILD_JOBS="$agent_cpu_count"
+export RAYON_NUM_THREADS="$agent_cpu_count"
+export UV_THREADPOOL_SIZE="$agent_cpu_count"
 exec "$@"

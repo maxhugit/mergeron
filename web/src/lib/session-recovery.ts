@@ -4,6 +4,8 @@ import { withBasePath } from '@/base-path';
 import type { PlatformSession } from './platform-session';
 import { recordSessionDiagnostic } from './session-diagnostics';
 
+type PauseReason = 'verification' | 'wake' | 'transport';
+let pauseReason: PauseReason = 'verification';
 let paused = false;
 let generation = 0;
 let owner: string | null = null;
@@ -25,8 +27,23 @@ export const isSessionPaused = () => paused;
 /** Presence of a prior verification is not authorization; the gate stays shut. */
 export const hasVerifiedSession = () => owner !== null;
 export const sessionVerificationGeneration = () => generation;
-export function pauseSession(reason: 'verification' | 'wake' = 'verification') {
-  if (paused) return;
+export const sessionPauseReason = () => pauseReason;
+export function useSessionPauseReason() {
+  return useSyncExternalStore((listener) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }, sessionPauseReason);
+}
+export function pauseSession(reason: PauseReason = 'verification') {
+  if (paused) {
+    if (reason === 'wake' && pauseReason === 'transport') return;
+    if (pauseReason !== reason) {
+      pauseReason = reason;
+      for (const listener of listeners) listener();
+    }
+    return;
+  }
+  pauseReason = reason;
   paused = true;
   generation++;
   pausedAt = Date.now();
@@ -199,5 +216,6 @@ export function installSessionRecovery() {
     owner = null;
     verifiedAt = 0;
     paused = false;
+    pauseReason = 'verification';
   };
 }

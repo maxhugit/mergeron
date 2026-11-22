@@ -432,3 +432,20 @@ Si le délai expire, l’API renvoie `504 / codex.request_timeout` avec le nom d
 méthode, plutôt qu’une erreur interne générique. Le client explique le délai et
 invite à vérifier l’état du fil avant une nouvelle tentative ; il ne rejoue pas
 un envoi dont l’acceptation serait incertaine.
+
+## Panne pendant la saisie
+
+Un délai dépassé, une panne réseau ou une réponse serveur indisponible pendant
+le contrôle périodique ne signifie pas que le compte a expiré. Après une telle
+erreur, l’écran indique une reconnexion technique, y compris pendant ses
+nouvelles tentatives, sans fenêtre modale de connexion. Pour une conversation
+précédemment vérifiée, un éditeur du seul texte du brouillon reste disponible.
+Il utilise le même brouillon en mémoire que le composeur ; aucun contenu de
+conversation, document, pièce jointe, téléversement ou action d’envoi n’est
+accessible par cet éditeur. La reprise conserve le texte modifié et ne l’envoie
+jamais automatiquement. Fermer ou recharger l’onglet peut toujours le perdre.
+
+Les API et le socket restent suspendus jusqu’à une réponse fraîche validant
+l’identité initiale. Un vrai refus HTTP, une identité différente ou un compte
+inactif retire aussi l’éditeur de brouillon. Les contrôles serveur sont conservés.
+Le journal distingue toujours le déclencheur périodique de l’erreur technique.

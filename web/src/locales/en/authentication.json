@@ -180,7 +180,9 @@
     "anotherMethod": "Use another authentication method",
     "resumingSession": "Resuming your session…",
     "silentUnavailable": "Silent session recovery could not complete. The provider, browser or a connection interruption may prevent verification. Retry or open a separate sign-in window; this page is retained.",
-    "recoveryUnavailable": "Automatic session recovery unavailable"
+    "recoveryUnavailable": "Automatic session recovery unavailable",
+    "localDraft": "Your draft — local editing",
+    "localDraftHelp": "You can keep typing. No message or attachment will be sent during the outage. The draft will be available in the conversation after connection verification."
   },
   "errors": {
     "requestFailed": "Authentication request failed",

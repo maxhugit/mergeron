@@ -258,3 +258,12 @@ Le budget est borné par tour : 1 000 appels par défaut, configurable entre 100
 début du tour, puis conservé avec le compteur lors des renouvellements. Ce
 réglage n’augmente ni les droits, ni la durée de validité, ni la concurrence
 des lectures GitHub, et ne contourne aucun quota du fournisseur.
+
+### Brouillon local pendant une panne
+
+Une pause technique conserve l’éditeur du seul brouillon texte déjà en mémoire
+pour la conversation courante. Aucun historique, pièce jointe, document, appel
+API ou envoi n’est autorisé par cet éditeur. Un refus réel ou un changement
+d’identité le masque ; la reprise exige toujours la réponse fraîche de session.
+Les limites de concurrence des descendants d’agents ne sont pas des frontières
+mémoire ou de sécurité ; les restrictions Docker et sandbox restent nécessaires.

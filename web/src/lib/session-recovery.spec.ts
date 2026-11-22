@@ -4,6 +4,7 @@ import {
   installSessionRecovery,
   isSessionPaused,
   pauseSession,
+  sessionPauseReason,
 } from './session-recovery';
 import type { PlatformSession } from './platform-session';
 import { configureApiClient } from '@/api-client';
@@ -232,4 +233,19 @@ it('requires verification after a document is restored from the back-forward cac
   Object.defineProperty(restored, 'persisted', { value: true });
   window.dispatchEvent(restored);
   expect(isSessionPaused()).toBe(true);
+});
+
+it('retains a technical pause reason during retries but replaces it on a real refusal', async () => {
+  acceptVerifiedSession(identity);
+  pauseSession('transport');
+  expect(sessionPauseReason()).toBe('transport');
+  pauseSession('wake');
+  expect(sessionPauseReason()).toBe('transport');
+  expect(isSessionPaused()).toBe(true);
+  await expect(
+    fetch('/api/projects', { method: 'POST' }),
+  ).rejects.toMatchObject({ name: 'AbortError' });
+  pauseSession('verification');
+  expect(sessionPauseReason()).toBe('verification');
+  expect(network).not.toHaveBeenCalled();
 });

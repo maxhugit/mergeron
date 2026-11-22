@@ -48,6 +48,7 @@ import {
   type PlatformSession,
 } from '@/lib/platform-session';
 import {
+  useSessionPauseReason,
   sessionOwner,
   sessionVerificationGeneration,
 } from '@/lib/session-recovery';
@@ -64,6 +65,8 @@ import { ImpersonationBanner } from '@/components/impersonation-controls';
 import { installBrowserWorkspaceSessions } from '@/lib/browser-workspace-sessions';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import { AgentWorkspaceHost } from '@/components/chat/agent-workspace-host';
+import { BASE_PATH } from '@/base-path';
+import { useComposerDraftStore } from '@/stores/composer-draft-store';
 import { SessionDiagnostics } from '@/components/session-diagnostics';
 import { recordSessionDiagnostic } from '@/lib/session-diagnostics';
 
@@ -148,7 +151,12 @@ function SessionRecovery({
   const renewal = useSessionRenewal(
     () => void session.refetch({ cancelRefetch: false }),
   );
-  const reconnecting = isSessionTransportError(session.error);
+  const pauseReason = useSessionPauseReason();
+  const technical =
+    retained &&
+    pauseReason === 'transport' &&
+    (!session.error || isSessionTransportError(session.error));
+  const reconnecting = technical || isSessionTransportError(session.error);
   const proxyExpired =
     session.error instanceof AuthRedirectError ||
     (session.error instanceof AuthResourceError &&
@@ -195,7 +203,7 @@ function SessionRecovery({
   // A normal wake-up check is not an expired session. The protected Activity
   // remains hidden and API/socket writes remain gated, but no renewal dialog,
   // focus trap or login action is introduced while the fresh probe is pending.
-  if (checking && !resuming)
+  if (checking && !resuming && !technical)
     return (
       <main
         role="status"
@@ -220,40 +228,48 @@ function SessionRecovery({
         />
       )}
       {t(
-        changed
-          ? 'access.identityChanged'
-          : checking
-            ? resuming
-              ? 'access.resumingSession'
-              : 'access.verifying'
-            : reconnecting
-              ? 'access.reconnecting'
-              : proxyExpired
-                ? silent === 'unavailable'
-                  ? 'access.recoveryUnavailable'
-                  : 'access.sessionExpired'
-                : 'access.unavailable',
+        technical
+          ? 'access.reconnecting'
+          : changed
+            ? 'access.identityChanged'
+            : checking
+              ? resuming
+                ? 'access.resumingSession'
+                : 'access.verifying'
+              : reconnecting
+                ? 'access.reconnecting'
+                : proxyExpired
+                  ? silent === 'unavailable'
+                    ? 'access.recoveryUnavailable'
+                    : 'access.sessionExpired'
+                  : 'access.unavailable',
       )}
     </h1>
   );
   const content = (
     <main className="mx-auto max-w-xl space-y-4 p-6">
-      {retained ? <DialogTitle asChild>{heading}</DialogTitle> : heading}
+      {retained && !technical ? (
+        <DialogTitle asChild>{heading}</DialogTitle>
+      ) : (
+        heading
+      )}
       <p>
         {t(
-          changed
-            ? 'access.identityChangedHelp'
-            : checking
-              ? 'access.retained'
-              : reconnecting
-                ? 'access.connectionInterrupted'
-                : proxyExpired
-                  ? silent === 'unavailable'
-                    ? 'access.silentUnavailable'
-                    : 'access.proxySessionExpired'
-                  : session.isError
-                    ? 'access.verificationError'
-                    : 'access.inactivePerson',
+          technical
+            ? 'access.connectionInterrupted'
+            : changed
+              ? 'access.identityChangedHelp'
+              : checking
+                ? 'access.retained'
+                : reconnecting
+                  ? 'access.connectionInterrupted'
+                  : proxyExpired
+                    ? silent === 'unavailable'
+                      ? 'access.silentUnavailable'
+                      : 'access.proxySessionExpired'
+                    : session.isError
+                      ? 'access.verificationError'
+                      : 'access.inactivePerson',
         )}
       </p>
       {retained && !checking && <p>{t('access.retained')}</p>}
@@ -299,10 +315,11 @@ function SessionRecovery({
         </button>
       )}
       {renewal.popupBlocked && <p role="alert">{t('access.popupBlocked')}</p>}
+      {technical && <RecoveryDraft />}
       <SessionDiagnostics />
     </main>
   );
-  if (!retained) return content;
+  if (!retained || technical) return content;
   return (
     <Dialog open>
       <DialogContent
@@ -318,6 +335,38 @@ function SessionRecovery({
         {content}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Local text only: no conversation, attachment, upload or send capability while gated. */
+function RecoveryDraft() {
+  const { t } = useTranslation('authentication');
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const relativePath =
+    BASE_PATH && pathname.startsWith(BASE_PATH + '/')
+      ? pathname.slice(BASE_PATH.length)
+      : pathname;
+  const threadId = /^\/t\/([^/]+)$/.exec(relativePath)?.[1];
+  const text = useComposerDraftStore((s) =>
+    threadId ? (s.drafts[threadId]?.text ?? '') : '',
+  );
+  const setText = useComposerDraftStore((s) => s.setText);
+  if (!threadId) return null;
+  return (
+    <section className="space-y-2 text-left">
+      <label htmlFor="recovery-draft" className="block font-medium">
+        {t('access.localDraft')}
+      </label>
+      <textarea
+        id="recovery-draft"
+        className="min-h-48 w-full resize-y rounded-xl border bg-background p-3 text-foreground"
+        value={text}
+        onChange={(event) => setText(threadId, event.target.value)}
+      />
+      <p className="text-sm text-muted-foreground">
+        {t('access.localDraftHelp')}
+      </p>
+    </section>
   );
 }
 
