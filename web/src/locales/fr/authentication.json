@@ -180,7 +180,9 @@
     "anotherMethod": "Utiliser une autre méthode d’authentification",
     "resumingSession": "Reprise de session en cours…",
     "silentUnavailable": "La reprise silencieuse n’a pas pu aboutir. Le fournisseur, le navigateur ou une interruption de connexion peut empêcher sa vérification. Vous pouvez réessayer ou ouvrir une connexion séparée ; cette page reste conservée.",
-    "recoveryUnavailable": "Reprise automatique indisponible"
+    "recoveryUnavailable": "Reprise automatique indisponible",
+    "localDraft": "Votre brouillon — saisie locale",
+    "localDraftHelp": "Vous pouvez continuer à écrire. Aucun message ni pièce jointe ne sera envoyé pendant la panne. Le brouillon sera disponible dans la conversation après vérification de la connexion."
   },
   "errors": {
     "requestFailed": "La requête d’authentification a échoué.",

@@ -162,3 +162,7 @@ les plafonds approuvés pour celui-ci restent inchangés.
 variable du Manager. Il ne peut pas augmenter les plafonds tmpfs globaux. Les
 recettes d’agents héritent de cette politique sans pouvoir changer ses budgets.
 Aucun volume disque non borné n’est activé par une variable de secours.
+
+Le budget des sous-processus d’agents `MERGERON_AGENT_CPU_COUNT` appartient à
+l’environnement du backend applicatif, pas à celui du Manager. Voir les
+[limites et la portée](environnement-agents.md#concurrence-des-outils-sur-le-serveur).

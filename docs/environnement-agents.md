@@ -176,3 +176,24 @@ exposer d’adresse ou de liste de processus. Une lecture refusée ou un systèm
 sans ces liens retourne « inconnu ». Des identifiants identiques ne prouvent
 pas les mêmes droits ni la joignabilité : conserver les sondes d’écoute et de
 connexion, ainsi que les contrôles de sandbox et proxy.
+
+## Concurrence des outils sur le serveur
+
+Dans l’image Linux, le lanceur applique à son propre processus et à ses
+descendants une affinité CPU limitée à deux CPU autorisés par défaut. Le backend
+HTTP n’est pas concerné. Cela borne le nombre de CPU annoncé par
+`os.availableParallelism()` aux outils qui dimensionnent leurs workers selon
+l’affinité, au lieu du nombre de cœurs de l’hôte. CMake, Cargo, Rayon et le pool
+libuv reçoivent également un budget cohérent.
+
+`MERGERON_AGENT_CPU_COUNT` permet à l’administrateur de choisir de 1 à 8 CPU ;
+la valeur est vérifiée au lancement. Le réglage s’applique aux nouveaux processus
+Codex, pas rétroactivement aux travaux déjà actifs. Le lanceur conserve son PID,
+les arguments, les caches privés et les protections du sandbox. Les installations
+sources hors Linux ne modifient pas l’affinité.
+
+Ce budget réduit les rafales de workers ; il n’est pas un quota mémoire par
+agent et un outil peut ignorer la détection automatique de concurrence. La limite
+RAM Docker de l’application reste nécessaire. Pour un isolement mémoire strict,
+les travaux lourds doivent être placés dans des conteneurs distincts disposant
+de leurs propres quotas, par exemple les environnements de test gérés.

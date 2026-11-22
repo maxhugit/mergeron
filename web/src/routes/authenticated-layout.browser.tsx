@@ -15,6 +15,7 @@ import {
   installSessionRecovery,
   isSessionPaused,
 } from '@/lib/session-recovery';
+import { useComposerDraftStore } from '@/stores/composer-draft-store';
 import { platformSessionKey } from '@/lib/platform-session';
 import i18n, { i18nReady } from '@/i18n';
 import '@/index.css';
@@ -178,7 +179,11 @@ test.each([
         ).toBe(true),
       );
       expect(isSessionPaused()).toBe(true);
-      expect(screen.queryByRole('textbox')).toBeNull();
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('textbox', { name: 'Unsent message' }),
+        ).toBeNull(),
+      );
       await expect(
         fetch('/api/projects', {
           method: 'POST',
@@ -941,5 +946,77 @@ test.each([390, 1280])(
       view.unmount();
       client.clear();
     }
+  },
+);
+
+test.each([390, 1180])(
+  'allows local draft editing during a server outage at %ipx, blocks sends, and hides it on a genuine denial',
+  async (width) => {
+    await page.viewport(width, 900);
+    await i18nReady;
+    await i18n.changeLanguage('en');
+    const identity = {
+      active: true,
+      kind: 'person',
+      personId: 'original',
+      name: 'Person',
+      role: 'administrator',
+    };
+    let status = 200;
+    vi.spyOn(window, 'fetch').mockImplementation(
+      async () =>
+        new Response(JSON.stringify(identity), {
+          status,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    dispose = installSessionRecovery();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    useComposerDraftStore.getState().setText('retained', 'Unsent original');
+    const view = render(
+      <QueryClientProvider client={client}>
+        <AuthenticatedLayout />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('textbox', { name: 'Unsent message' });
+    status = 503;
+    await act(() => client.refetchQueries({ queryKey: platformSessionKey }));
+    const draft = await screen.findByRole('textbox', {
+      name: 'Your draft — local editing',
+    });
+    expect((draft as HTMLTextAreaElement).value).toBe('Unsent original');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(
+      screen.queryByRole('textbox', { name: 'Unsent message' }),
+    ).toBeNull();
+    fireEvent.change(draft, {
+      target: { value: 'Continued locally during outage' },
+    });
+    expect(useComposerDraftStore.getState().drafts.retained.text).toBe(
+      'Continued locally during outage',
+    );
+    await expect(
+      fetch('/api/projects', { method: 'POST' }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    await page.screenshot({
+      path: `../../.vitest-screenshots/local-outage-draft-${width}.png`,
+    });
+    status = 401;
+    await act(() => client.refetchQueries({ queryKey: platformSessionKey }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('textbox', { name: 'Your draft — local editing' }),
+      ).toBeNull(),
+    );
+    status = 200;
+    await act(() => client.refetchQueries({ queryKey: platformSessionKey }));
+    await screen.findByRole('textbox', { name: 'Unsent message' });
+    expect(useComposerDraftStore.getState().drafts.retained.text).toBe(
+      'Continued locally during outage',
+    );
+    view.unmount();
+    client.clear();
   },
 );

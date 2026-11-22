@@ -330,7 +330,12 @@ export function usePlatformSession() {
               : {}),
           },
         );
-        if (!signal.aborted) pauseSession();
+        if (!signal.aborted)
+          pauseSession(
+            error instanceof Error && isSessionTransportError(error)
+              ? 'transport'
+              : 'verification',
+          );
         throw error;
       }
     },
