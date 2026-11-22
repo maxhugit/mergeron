@@ -1,15 +1,23 @@
 [
   {
     "tag": "v0.8.10",
-    "date": "2026-11-18",
+    "date": "2026-11-22",
     "highlights": {
       "fr": [
         "Le plafond des outils MCP internes passe de 100 à 1 000 appels par tour pour éviter les blocages lors des travaux longs, notamment les consultations GitHub.",
-        "Le budget est configurable entre 100 et 10 000 appels. Les renouvellements conservent le compteur et les droits existants ; les quotas GitHub et la concurrence des lectures restent inchangés."
+        "Le budget est configurable entre 100 et 10 000 appels. Les renouvellements conservent le compteur et les droits existants ; les quotas GitHub et la concurrence des lectures restent inchangés.",
+        "La lecture du catalogue de modèles ne renouvelle plus les identifiants depuis une copie temporaire, afin d’éviter de désynchroniser la session Codex principale.",
+        "Lors d’une panne technique de connexion, le brouillon texte reste modifiable localement. Les envois restent suspendus et une véritable erreur d’accès continue de protéger la session.",
+        "Les outils des agents disposent par défaut d’une affinité de deux CPU sous Linux pour limiter les rafales de workers ; ce budget est configurable de un à huit CPU.",
+        "Les images retirent les bibliothèques OpenSSL inutilisées du Manager et exigent les en-têtes Linux corrigés, sans désactiver les contrôles de sécurité."
       ],
       "en": [
         "The internal MCP tool ceiling increases from 100 to 1,000 calls per turn to prevent long-running work, including GitHub consultations, from being blocked.",
-        "The budget is configurable between 100 and 10,000 calls. Renewals preserve the counter and existing permissions; GitHub quotas and read concurrency remain unchanged."
+        "The budget is configurable between 100 and 10,000 calls. Renewals preserve the counter and existing permissions; GitHub quotas and read concurrency remain unchanged.",
+        "Model catalog reads no longer refresh credentials from a temporary copy, preventing the main Codex session from becoming desynchronized.",
+        "During a technical connection outage, draft text remains editable locally. Sending stays suspended and genuine access failures still protect the session.",
+        "Agent tools default to a two-CPU affinity on Linux to limit bursts of workers; the budget is configurable from one to eight CPUs.",
+        "Images remove unused Manager OpenSSL libraries and require patched Linux headers without disabling security checks."
       ]
     }
   },
@@ -363,8 +371,12 @@
     "tag": "v0.5.1",
     "date": "2026-10-29",
     "highlights": {
-      "fr": ["Navigateur isolé pris en charge par le Manager en production."],
-      "en": ["Manager support for the isolated browser in production."]
+      "fr": [
+        "Navigateur isolé pris en charge par le Manager en production."
+      ],
+      "en": [
+        "Manager support for the isolated browser in production."
+      ]
     }
   },
   {
