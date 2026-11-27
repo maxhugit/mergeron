@@ -45,8 +45,22 @@ RUN mkdir -p /runtime/run/mergeron-manager /runtime/var/lib/mergeron-manager \
  && chmod 0750 /runtime/run/mergeron-manager \
  && chmod 0700 /runtime/var/lib/mergeron-manager
 
+# Patch the inherited distroless zstd package with Debian's signed security update.
+FROM debian:trixie-slim AS manager-zstd
+RUN apt-get update \
+ && apt-get download 'libzstd1=1.5.7+dfsg-1+deb13u1' \
+ && mkdir -p /out/var/lib/dpkg/status.d /control \
+ && dpkg-deb --extract libzstd1_*.deb /out \
+ && dpkg-deb --control libzstd1_*.deb /control \
+ && cp /control/control /out/var/lib/dpkg/status.d/libzstd1 \
+ && cp /control/md5sums /out/var/lib/dpkg/status.d/libzstd1.md5sums \
+ && test "$(dpkg-deb --field libzstd1_*.deb Version)" = '1.5.7+dfsg-1+deb13u1'
+
 # Keep npm and the build distribution out of the privileged final image.
 FROM gcr.io/distroless/nodejs22-debian13@sha256:f643bc05bdcf5a8d98442e8a2a5c7a3a4c3a0e3bc4cdc5f10557d47f1ddd5812
+
+COPY --from=manager-zstd /out/ /
+RUN ["/nodejs/bin/node", "--input-type=module", "-e", "import assert from 'node:assert/strict'; import {readFileSync} from 'node:fs'; import {zstdCompressSync,zstdDecompressSync} from 'node:zlib'; assert.match(readFileSync('/var/lib/dpkg/status.d/libzstd1','utf8'),/^Version: 1\\.5\\.7\\+dfsg-1\\+deb13u1$/m); assert.equal(zstdDecompressSync(zstdCompressSync('manager-zstd-probe')).toString(),'manager-zstd-probe');"]
 
 # Node embeds its own compression implementation: the inherited Debian shared
 # zlib is unused (CVE-2026-76844). Remove its real files and inventory together,
