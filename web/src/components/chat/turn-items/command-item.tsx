@@ -13,7 +13,11 @@
  */
 import { pendingRequestKey } from '@/lib/pending-request-identity';
 import { useState } from 'react';
-import { useExpandedTechnicalDetails } from '@/lib/technical-display';
+import { TechnicalDetails } from '../technical-details';
+import {
+  useCollapsedTechnicalChildren,
+  useExpandedTechnicalDetails,
+} from '@/lib/technical-display';
 import { ChevronDown, ChevronRight, Loader2, Terminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ApprovalRequest } from '@/types/approval';
@@ -40,6 +44,42 @@ interface Props {
 const COLLAPSE_THRESHOLD = 200;
 
 export function CommandItem({ item, approvals = [] }: Props) {
+  const { t } = useTranslation();
+  const collapseChildren = useCollapsedTechnicalChildren();
+  if (
+    collapseChildren &&
+    !approvals.some((approval) => approval.status === 'pending')
+  ) {
+    const status = !item.completed
+      ? t('running')
+      : item.exitCode !== undefined && item.exitCode !== 0
+        ? `${t('exit')} ${item.exitCode}`
+        : t('donee5fd9cfe');
+    return (
+      <TechnicalDetails
+        label={
+          <>
+            {t('terminal')} ·{' '}
+            <span
+              className={
+                item.completed
+                  ? item.exitCode ? 'text-red-500' : 'text-green-500'
+                  : undefined
+              }
+            >
+              {status}
+            </span>
+          </>
+        }
+      >
+        <CommandContent item={item} approvals={approvals} />
+      </TechnicalDetails>
+    );
+  }
+  return <CommandContent item={item} approvals={approvals} />;
+}
+
+function CommandContent({ item, approvals = [] }: Props) {
   const { t } = useTranslation();
   const fullCommand = item.command
     ? stripShellWrapper(item.command)

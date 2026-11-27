@@ -1139,6 +1139,21 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     );
     if (!folder.effectivePath)
       throw new ConflictException('Active folder is unresolved');
+    const selectedCopy = this.db
+      .select()
+      .from(projectWorkspaceCopies)
+      .where(
+        and(
+          eq(projectWorkspaceCopies.projectId, projectId),
+          eq(projectWorkspaceCopies.localWorkspaceId, folder.resourceId),
+        ),
+      )
+      .get();
+    if (
+      selectedCopy &&
+      copyAgentIds(this.db, projectId, selectedCopy.id).length
+    )
+      throw new ConflictException('GIT_COPY_OWNED');
     const response = await this.threads.startThread({
       cwd: folder.effectivePath,
       ...(model ? { model } : {}),

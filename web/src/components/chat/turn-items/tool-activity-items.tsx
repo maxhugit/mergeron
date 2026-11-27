@@ -1,6 +1,9 @@
 /** Distinct cards for hook, standalone output, dynamic-tool, and collaboration items. */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useExpandedTechnicalDetails } from '@/lib/technical-display';
+import {
+  useCollapsedTechnicalChildren,
+  useExpandedTechnicalDetails,
+} from '@/lib/technical-display';
 import {
   Bot,
   ChevronRight,
@@ -34,8 +37,11 @@ function ActivityCard({
 }: ActivityCardProps) {
   const hasBody = children !== undefined && children !== null;
   const expandDetails = useExpandedTechnicalDetails();
-  const [requestedOpen, setOpen] = useState(expandDetails || !completed);
-  const open = requestedOpen || failed;
+  const collapseChildren = useCollapsedTechnicalChildren();
+  const [requestedOpen, setOpen] = useState(
+    !collapseChildren && (expandDetails || !completed),
+  );
+  const open = requestedOpen || (!collapseChildren && failed);
   const previousCompleted = useRef(completed);
 
   useEffect(() => {

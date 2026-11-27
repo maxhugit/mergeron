@@ -217,8 +217,7 @@ synthétique, sans ouvrir le microphone physique ni jouer la voix distante.
 
 Dans **Capacités → Détails techniques**, choisir :
 
-- **Sans détails techniques** : les activités techniques consécutives sont regroupées
-  derrière une ligne dépliable. Les réponses de l’agent restent intégrales, dans leur ordre.
+- **Sans détails techniques** : les activités techniques courantes sont masquées. Les réponses de l’agent restent intégrales, dans leur ordre.
 - **Détails repliés** (par défaut) : une ligne par activité ; cliquer pour consulter
   les commandes, résultats, logs ou changements de fichiers.
 - **Tout afficher** : les activités techniques et leurs contenus sont ouverts par défaut.
@@ -228,6 +227,13 @@ Le choix est enregistré côté serveur pour cet agent et s’applique immédiat
 on peut déplier les détails ou changer de mode à tout moment. Les erreurs connues,
 questions et approbations en attente restent visibles, indépendamment du mode.
 Les résultats visuels et les réponses de l’agent restent affichés.
+
+L’option **Regrouper les activités techniques** est aussi disponible dans
+**Capacités → Détails techniques**. Lorsqu’elle est activée, chaque groupe est
+fermé par défaut. L’ouvrir affiche les opérations, elles aussi repliées, y compris
+les commandes du terminal et les opérations en erreur. Les en-têtes conservent
+leur statut ; cliquer sur une opération affiche son contenu. Les demandes de
+confirmation restent accessibles séparément pour permettre une décision éclairée.
 
 Ce réglage est uniquement visuel : aucune consigne n’est envoyée au modèle ;
 la longueur des réponses, le prompt, l’effort de raisonnement et les permissions

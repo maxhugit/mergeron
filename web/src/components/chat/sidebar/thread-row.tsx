@@ -4,6 +4,7 @@ import {
   ArchiveRestore,
   Bot,
   ClipboardCheck,
+  CircleCheck,
   GitFork,
   GripVertical,
   Loader2,
@@ -37,6 +38,7 @@ interface Props {
   actionPending: boolean;
   /** True while this thread has an active turn (generating). */
   running?: boolean;
+  workCompleted?: boolean;
   /** True while this thread has at least one pending approval. */
   pendingApproval?: boolean;
   /** Number of hydrated pending approvals for this thread. */
@@ -79,6 +81,7 @@ export function ThreadRow({
   destructiveDisabled,
   actionPending,
   running = false,
+  workCompleted = false,
   pendingApproval = false,
   pendingApprovalCount = 0,
   waitingOnUserInput = false,
@@ -126,6 +129,9 @@ export function ThreadRow({
     <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
   ) : null;
 
+  const showCompletion =
+    workCompleted && !running && !pendingApproval && !waitingOnUserInput;
+
   // Badge text: show count only when > 1 (single approval already indicated by icon)
   const badgeText =
     pendingApprovalCount > 9 ? '9+' : String(pendingApprovalCount);
@@ -154,7 +160,7 @@ export function ThreadRow({
         type="button"
         onClick={onOpen}
         className={cn(
-          'flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 text-left text-xs transition-colors',
+          'flex min-w-0 flex-1 flex-nowrap whitespace-nowrap cursor-pointer items-center gap-1.5 rounded-md px-2 py-0.5 text-left text-xs transition-colors',
           isActive
             ? 'bg-accent text-accent-foreground'
             : archived
@@ -170,9 +176,18 @@ export function ThreadRow({
           />
         )}
         {statusIcon}
-        <span className="truncate">
+        <span className="min-w-0 flex-1 truncate">
           {threadLabel(thread, t('newWorkAgent'))}
         </span>
+        {showCompletion && (
+          <CircleCheck
+            className="h-3 w-3 shrink-0 text-emerald-500"
+            role="img"
+            aria-label={t('agentWorkCompletedUnread')}
+          >
+            <title>{t('agentWorkCompletedUnread')}</title>
+          </CircleCheck>
+        )}
         {pendingApprovalCount > 1 && (
           <span className="ml-auto rounded-full bg-yellow-500/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-yellow-600 dark:text-yellow-400">
             {badgeText}

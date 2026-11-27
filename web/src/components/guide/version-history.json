@@ -1,5 +1,25 @@
 [
   {
+    "tag": "v0.8.11",
+    "date": "2026-11-27",
+    "highlights": {
+      "fr": [
+        "Les activités techniques regroupées et leurs sous-activités restent repliées par défaut, y compris les commandes et les erreurs. Le regroupement se règle dans Détails techniques.",
+        "Une coche discrète signale la fin réussie du travail d’un agent et disparaît au clic, sans notification supplémentaire ni retour à la ligne dans la liste.",
+        "Les copies Git existantes ne sont plus proposées à la création d’un agent. Le serveur refuse une copie déjà réservée avant de démarrer le nouvel agent.",
+        "Le séparateur inutile en haut du menu général est supprimé. Les listes conservent un affichage compact sur mobile et ordinateur.",
+        "La construction utilise les archives Debian immuables pour OpenSSH et le Manager reçoit le correctif de sécurité Zstandard, sans désactiver les scans."
+      ],
+      "en": [
+        "Grouped technical activities and their child operations start collapsed, including commands and failures. Grouping is configured under Technical details.",
+        "A compact check marks successful agent work and disappears when clicked, without another notification or wrapping the agent row.",
+        "Existing Git copies are no longer offered when creating an agent. The server rejects a reserved copy before starting the new agent.",
+        "The unnecessary separator at the top of the global menu is removed. Lists stay compact on mobile and desktop.",
+        "Builds use immutable Debian archives for OpenSSH, and the Manager receives the Zstandard security fix without disabling scans."
+      ]
+    }
+  },
+  {
     "tag": "v0.8.10",
     "date": "2026-11-22",
     "highlights": {

@@ -1,13 +1,18 @@
 import { useState, type ReactNode } from 'react';
-import { ExpandedTechnicalDetails } from '@/lib/technical-display';
+import {
+  CollapsedTechnicalChildren,
+  ExpandedTechnicalDetails,
+} from '@/lib/technical-display';
 
 export function TechnicalDetails({
   label,
   expanded = false,
+  collapseChildren = false,
   children,
 }: {
-  label: string;
+  label: ReactNode;
   expanded?: boolean;
+  collapseChildren?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(expanded);
@@ -21,9 +26,11 @@ export function TechnicalDetails({
         {label}
       </summary>
       {open && (
-        <ExpandedTechnicalDetails.Provider value={true}>
-          <div className="mt-2 space-y-2">{children}</div>
-        </ExpandedTechnicalDetails.Provider>
+        <CollapsedTechnicalChildren.Provider value={collapseChildren}>
+          <ExpandedTechnicalDetails.Provider value={!collapseChildren}>
+            <div className="mt-2 space-y-2">{children}</div>
+          </ExpandedTechnicalDetails.Provider>
+        </CollapsedTechnicalChildren.Provider>
       )}
     </details>
   );

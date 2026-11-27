@@ -66,3 +66,13 @@ qui bloquait la publication après la PR 522. Le contrôle de version est appliq
 à la construction et revérifié dans l’image. Aucun filtre de vulnérabilité ni
 extension OpenVEX n’est ajouté. Cette mise à jour du paquet d’en-têtes ne met
 pas à jour le noyau de l’hôte Docker.
+
+## Zstandard du Manager
+
+Le paquet `libzstd1` hérité de l’image distroless est remplacé par la mise à jour
+Debian Trixie `1.5.7+dfsg-1+deb13u1` pour
+[CVE-2026-124851](https://security-tracker.debian.org/tracker/CVE-2026-124851).
+APT vérifie les métadonnées signées et le contenu du paquet ; la version exacte
+est exigée. Les fichiers et l’inventaire dpkg sont remplacés ensemble. Un nouveau
+processus Node vérifie cette version et une compression/décompression Zstandard.
+Le scan Trivy du Manager conserve son blocage sur HIGH/CRITICAL sans exception.

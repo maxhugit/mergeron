@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 cd /build
+# Pin the archived source set: the rolling Debian pool removes superseded releases.
 fetch() {
   local source="$1" file="$2" digest="$3"
   curl --fail --silent --show-error --location --retry 3 \
-    "https://deb.debian.org/debian/pool/main/o/${source}/${file}" --output "${file}"
+    "https://snapshot.debian.org/archive/debian/20261006T203214Z/pool/main/o/${source}/${file}" --output "${file}"
   echo "${digest}  ${file}" | sha256sum --check --strict
 }
 fetch openssh openssh_10.6p1-1.dsc 3169605230f88ceeeffe12995c18bec6019d0649125326eea442dd76a19015d4

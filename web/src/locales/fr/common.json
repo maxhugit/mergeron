@@ -1681,6 +1681,7 @@
   "gitDeliverablesTitle": "Livrables Git",
   "projectShortDescription": "Description courte",
   "projectShortDescriptionHint": "Facultative, sur plusieurs lignes · 1 000 caractères maximum.",
+  "agentWorkCompletedUnread": "Travail terminé · cliquer pour effacer l’indicateur",
   "groupTechnicalActivities": "Regrouper les activités techniques",
   "agentElapsedInterrupted": "Interrompu",
   "agentElapsedFailed": "En erreur",

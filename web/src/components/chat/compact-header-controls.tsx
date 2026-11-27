@@ -59,7 +59,7 @@ export function CompactHeaderControls({
         className="w-80 max-w-[calc(100vw-1.5rem)] max-h-[calc(100dvh-6rem)] space-y-3 overflow-y-auto p-3"
       >
         <McpStatusBadge mode="header" />
-        <div className="border-t pt-1">
+        <div>
           <ReloadApplicationButton labelled />
           {isAdministrator && (
             <Button

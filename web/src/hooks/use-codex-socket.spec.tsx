@@ -1,3 +1,4 @@
+import { useAgentCompletionStore } from '@/stores/agent-completion-store';
 /** Global attention must work without transcript rooms, including recovery. */
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -469,4 +470,28 @@ it('accepts an engine generation reset after the application itself reconnects',
       ?.timeline.find((e) => e.kind === 'system' && e.codexRecovery),
   ).toMatchObject({ codexRecovery: { phase: 'ready', generation: 1 } });
   view.unmount();
+});
+
+it('marks background work completed without opening the transcript and clears on teardown', async () => {
+  const view = mount();
+  await waitFor(() =>
+    expect(transport.listeners.has('conversation.work.completed')).toBe(true),
+  );
+  const notify = transport.listeners.get('conversation.work.completed')!;
+  act(() => notify({ threadId: 'background', turnId: 'turn' }));
+  expect(useAgentCompletionStore.getState().unread.has('background')).toBe(
+    true,
+  );
+  expect(useTimelineStore.getState().threadId).not.toBe('background');
+  act(() => useAgentCompletionStore.getState().acknowledge(['background']));
+  act(() => notify({ threadId: 'background', turnId: 'turn' }));
+  expect(useAgentCompletionStore.getState().unread.has('background')).toBe(
+    false,
+  );
+  act(() => notify({ threadId: 3, turnId: 'invalid' }));
+  expect(useAgentCompletionStore.getState().unread.size).toBe(0);
+  act(() => notify({ threadId: 'background', turnId: 'next' }));
+  view.unmount();
+  expect(useAgentCompletionStore.getState().unread.size).toBe(0);
+  expect(transport.listeners.has('conversation.work.completed')).toBe(false);
 });

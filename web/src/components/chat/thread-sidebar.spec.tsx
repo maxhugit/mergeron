@@ -1,3 +1,4 @@
+import { useAgentCompletionStore as completion } from '@/stores/agent-completion-store';
 /** Real query/store orchestration: archive completion must survive changes to the displayed rows. */
 import {
   Children,
@@ -21,6 +22,7 @@ import { projectsQueryKey } from '@/lib/projects-api';
 
 const transport = vi.hoisted(() => ({
   archive: vi.fn(),
+  create: vi.fn(),
   overview: vi.fn(),
   navigate: vi.fn(),
   emit: vi.fn(),
@@ -33,6 +35,9 @@ vi.mock('@/hooks/use-project-navigation-preference', () => ({
     toggle: vi.fn(),
     enable: transport.enable,
   }),
+}));
+vi.mock('@/lib/project-agent-creation', () => ({
+  createProjectAgent: transport.create,
 }));
 vi.mock('@/socket', () => ({
   getSocket: () => ({
@@ -406,3 +411,103 @@ it.each(['overview', 'workspaceDetail'] as const)(
     }
   },
 );
+
+it('dismisses completion markers for the clicked agent and its grouped branches only', async () => {
+  const root = row('root', ['root', 'branch']);
+  const neighbour = row('neighbour');
+  transport.overview.mockResolvedValue({
+    data: { data: [root, neighbour], nextCursor: null },
+  });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  client.setQueryData(projectsQueryKey, { projects: [] });
+  completion.getState().complete('branch', 'finished');
+  completion.getState().complete('neighbour', 'other');
+  const view = renderHook(() => ThreadSidebar(), {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  try {
+    await waitFor(() =>
+      expect(
+        findElement(view.result.current, WorkspaceDetail)?.props.threads,
+      ).toHaveLength(2),
+    );
+    const rendered = findElement(
+      view.result.current,
+      WorkspaceDetail,
+    )!.props.renderThreadRow(root.thread, false) as ReactElement<
+      React.ComponentProps<typeof ThreadRow>
+    >;
+    expect(rendered.props.workCompleted).toBe(true);
+    act(() => rendered.props.onOpen());
+    expect(completion.getState().unread.has('branch')).toBe(false);
+    expect(completion.getState().unread.has('neighbour')).toBe(true);
+  } finally {
+    view.unmount();
+    client.clear();
+    completion.getState().clear();
+  }
+});
+
+it('creates in the managed space directly when all other workspaces are Git copies', async () => {
+  useLayoutStore.getState().setSidebarView({ type: 'overview' });
+  transport.create.mockImplementation(() => new Promise(() => {}));
+  transport.overview.mockResolvedValue({
+    data: { data: [], nextCursor: null },
+  });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  client.setQueryData(projectsQueryKey, { projects: [] });
+  const view = renderHook(() => ThreadSidebar(), {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  try {
+    const overview = findElement(view.result.current, WorkspaceOverview)!;
+    act(() =>
+      overview.props.onCreateAgentInWorkspace({
+        projectId: 'p',
+        cwd: '/workspace',
+        name: 'Project',
+        threads: [],
+        resources: [],
+        archivedAgents: [],
+        workspaces: [
+          {
+            id: 'main',
+            projectId: 'p',
+            path: '/workspace',
+            name: 'Main',
+            primary: true,
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          {
+            id: 'copy',
+            projectId: 'p',
+            path: '/workspace/copy',
+            name: 'Other agent copy',
+            primary: false,
+            sourceResourceId: 'git-source',
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+      }),
+    );
+    await waitFor(() =>
+      expect(transport.create).toHaveBeenCalledWith(
+        { projectId: 'p', workspacePath: '/workspace' },
+        expect.anything(),
+      ),
+    );
+  } finally {
+    view.unmount();
+    client.clear();
+  }
+});

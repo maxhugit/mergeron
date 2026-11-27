@@ -1,3 +1,6 @@
+import { AgentCreationWorkspaceChoices } from './agent-creation-workspace-choices';
+import { agentCreationWorkspaces } from '@/lib/agent-creation-workspaces';
+import { useAgentCompletionStore } from '@/stores/agent-completion-store';
 import { useSidebarPreferences } from '@/hooks/use-sidebar-preferences';
 import { forgetPresentations } from '@/lib/mockup-presentation';
 /**
@@ -7,7 +10,7 @@ import { forgetPresentations } from '@/lib/mockup-presentation';
  */
 import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
 import { DragDropProvider } from '@dnd-kit/react';
-import { FolderKanban, FolderOpen, House, ArrowLeft } from 'lucide-react';
+import { FolderKanban, House, ArrowLeft } from 'lucide-react';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -130,6 +133,7 @@ export function ThreadSidebar() {
   const threadMode = useTimelineStore((s) => s.threadMode);
   const selectActivity = useMemo(() => createSidebarActivitySelector(), []);
   const activityByThread = useTimelineStore(selectActivity);
+  const completedAgents = useAgentCompletionStore((state) => state.unread);
   const subscribedThreadIds = useTimelineStore((s) => s.subscribedThreadIds);
   const setActiveThread = useTimelineStore((s) => s.setActiveThread);
   const clearThread = useTimelineStore((s) => s.clearThread);
@@ -933,8 +937,14 @@ export function ThreadSidebar() {
         pendingApproval={waitingOnApproval}
         pendingApprovalCount={pendingApprovalCount}
         waitingOnUserInput={waitingOnUserInput}
+        workCompleted={(row?.memberThreadIds ?? [thread.id]).some((id) =>
+          completedAgents.has(id),
+        )}
         hasBranchDescendants={Boolean(row?.hasBranchDescendants)}
         onOpen={() => {
+          useAgentCompletionStore
+            .getState()
+            .acknowledge(row?.memberThreadIds ?? [thread.id]);
           if (archived) void openArchivedThread(thread);
           else openLiveThread(thread);
         }}
@@ -984,7 +994,7 @@ export function ThreadSidebar() {
   };
 
   const requestConversation = (kind: 'agent', group: WorkspaceGroup) => {
-    const workspaces = group.workspaces ?? [];
+    const workspaces = agentCreationWorkspaces(group.workspaces);
     if (workspaces.length <= 1) {
       if (!group.projectId) return;
       createConversationIn(
@@ -994,7 +1004,7 @@ export function ThreadSidebar() {
       );
       return;
     }
-    setPendingConversation({ kind, group });
+    setPendingConversation({ kind, group: { ...group, workspaces } });
   };
 
   const projectsHeader = (
@@ -1185,7 +1195,7 @@ export function ThreadSidebar() {
                   workspacePath: group.cwd,
                   createdAt: 0,
                   updatedAt: 0,
-                  workspaces: group.workspaces ?? [],
+                  workspaces: agentCreationWorkspaces(group.workspaces),
                   resources: group.resources ?? [],
                 });
               }}
@@ -1289,27 +1299,17 @@ export function ThreadSidebar() {
               {t('chooseTheFileAndExecutionContextForThisConversation')}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="grid gap-2">
-            {(pendingConversation?.group.workspaces ?? []).map((workspace) => (
-              <Button
-                key={workspace.id}
-                variant={workspace.primary ? 'secondary' : 'outline'}
-                className="justify-start"
-                onClick={() =>
-                  pendingConversation &&
-                  pendingConversation.group.projectId &&
-                  createConversationIn(
-                    pendingConversation.kind,
-                    workspace.path,
-                    pendingConversation.group.projectId,
-                  )
-                }
-              >
-                <FolderOpen className="h-4 w-4" />
-                {workspace.primary ? t('primaryWorkspace') : workspace.name}
-              </Button>
-            ))}
-          </div>
+          <AgentCreationWorkspaceChoices
+            workspaces={pendingConversation?.group.workspaces ?? []}
+            onSelect={(path) => {
+              if (pendingConversation?.group.projectId)
+                createConversationIn(
+                  pendingConversation.kind,
+                  path,
+                  pendingConversation.group.projectId,
+                );
+            }}
+          />
           <AlertDialogFooter>
             <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
           </AlertDialogFooter>

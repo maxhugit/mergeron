@@ -1,6 +1,9 @@
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { useState } from 'react';
-import { useExpandedTechnicalDetails } from '@/lib/technical-display';
+import {
+  useCollapsedTechnicalChildren,
+  useExpandedTechnicalDetails,
+} from '@/lib/technical-display';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { useTimelineStore } from '@/stores/timeline-store';
@@ -17,8 +20,10 @@ export function ReasoningItem({ item }: Props) {
   );
   const toggleReasoning = useTimelineStore((s) => s.toggleReasoning);
   const expandDetails = useExpandedTechnicalDetails();
+  const collapseChildren = useCollapsedTechnicalChildren();
   const [localExpanded, setLocalExpanded] = useState(expandDetails);
-  const expanded = expandDetails ? localExpanded : savedExpanded;
+  const expanded =
+    expandDetails || collapseChildren ? localExpanded : savedExpanded;
 
   if (!item.content) return null;
 
@@ -26,7 +31,7 @@ export function ReasoningItem({ item }: Props) {
     <div
       className="cursor-pointer select-none"
       onClick={() =>
-        expandDetails
+        expandDetails || collapseChildren
           ? setLocalExpanded((value) => !value)
           : toggleReasoning(item.itemId)
       }
