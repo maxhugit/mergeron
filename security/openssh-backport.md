@@ -8,6 +8,11 @@ six inputs, including signed source descriptors, are pinned in
 Trixie security update. Future security releases require rebuilding this backport.
 No sid repository or sid runtime library is added.
 
+The six source downloads use the immutable Debian snapshot dated
+`20261006T203214Z`, because the rolling Debian pool removes superseded sources.
+The source versions and all six SHA-256 checks remain unchanged; a missing
+archive or a digest mismatch still fails the build.
+
 Packages installed: `openssh-common` and `openssh-client-gssapi`. The latter
 provides/replaces `openssh-client`, retaining GSSAPI authentication and key exchange
 that Debian moved out of the standard client. Common tools include ssh-keygen and
@@ -42,7 +47,7 @@ Sources:
 - https://www.openssh.org/releasenotes.html#10.6p1
 - https://security-tracker.debian.org/tracker/CVE-2026-60002
 - https://security-tracker.debian.org/tracker/CVE-2026-106583
-- https://deb.debian.org/debian/pool/main/o/openssh/openssh_10.6p1-1.dsc
-- https://deb.debian.org/debian/pool/main/o/openssh-gssapi/openssh-gssapi_10.6p1-1.dsc
+- https://snapshot.debian.org/archive/debian/20261006T203214Z/pool/main/o/openssh/openssh_10.6p1-1.dsc
+- https://snapshot.debian.org/archive/debian/20261006T203214Z/pool/main/o/openssh-gssapi/openssh-gssapi_10.6p1-1.dsc
 
 Detector behavior: https://github.com/aquasecurity/trivy/blob/v0.76.1/pkg/detector/ospkg/debian/debian.go#L103-L107
