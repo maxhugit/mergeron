@@ -1,3 +1,4 @@
+import { useAgentCompletionStore as completion } from '@/stores/agent-completion-store';
 /** Real query/store orchestration: archive completion must survive changes to the displayed rows. */
 import {
   Children,
@@ -406,3 +407,43 @@ it.each(['overview', 'workspaceDetail'] as const)(
     }
   },
 );
+
+it('dismisses completion markers for the clicked agent and its grouped branches only', async () => {
+  const root = row('root', ['root', 'branch']);
+  const neighbour = row('neighbour');
+  transport.overview.mockResolvedValue({
+    data: { data: [root, neighbour], nextCursor: null },
+  });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  client.setQueryData(projectsQueryKey, { projects: [] });
+  completion.getState().complete('branch', 'finished');
+  completion.getState().complete('neighbour', 'other');
+  const view = renderHook(() => ThreadSidebar(), {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  try {
+    await waitFor(() =>
+      expect(
+        findElement(view.result.current, WorkspaceDetail)?.props.threads,
+      ).toHaveLength(2),
+    );
+    const rendered = findElement(
+      view.result.current,
+      WorkspaceDetail,
+    )!.props.renderThreadRow(root.thread, false) as ReactElement<
+      React.ComponentProps<typeof ThreadRow>
+    >;
+    expect(rendered.props.workCompleted).toBe(true);
+    act(() => rendered.props.onOpen());
+    expect(completion.getState().unread.has('branch')).toBe(false);
+    expect(completion.getState().unread.has('neighbour')).toBe(true);
+  } finally {
+    view.unmount();
+    client.clear();
+    completion.getState().clear();
+  }
+});

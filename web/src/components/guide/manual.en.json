@@ -711,7 +711,8 @@
               }
             ],
             "paragraphs": [
-              "In Chat controls → Technical details, enable Group technical activities to group consecutive operations. Groups start closed; opening a group leaves its operations and terminal commands collapsed, including failures. Click each row to inspect its content. Approval requests remain visible."
+              "In Chat controls → Technical details, enable Group technical activities to group consecutive operations. Groups start closed; opening a group leaves its operations and terminal commands collapsed, including failures. Click each row to inspect its content. Approval requests remain visible.",
+              "A green check in the agent list indicates successful work completed during the current browser session. Click the agent to dismiss it. It stays on the name row and does not create a bell notification; it is not retained after a reload or the end of the session."
             ]
           },
           {

@@ -14,6 +14,7 @@ import type { PendingServerRequestDto } from '../pending-approvals/dto/pending-a
 
 describe('ThreadsGateway', () => {
   let gateway: ThreadsGateway;
+  let identities: IdentityService;
   const metadataChanges = new Subject<void>();
   const pendingChanges = new Subject<void>();
   const admittedRequests = new Subject<PendingServerRequestDto>();
@@ -103,6 +104,7 @@ describe('ThreadsGateway', () => {
     }).compile();
 
     gateway = module.get(ThreadsGateway);
+    identities = module.get(IdentityService);
     gateway.server = mockServer as never;
     gateway.afterInit();
     mockAuthService.authenticateToken.mockResolvedValue({ ok: true });
@@ -193,6 +195,55 @@ describe('ThreadsGateway', () => {
       'codex.notification',
       notification,
     );
+  });
+
+  it('announces successful background work without exposing transcript content', () => {
+    gateway.handleUnsubscribe({ id: 'authorized', leave: vi.fn() } as never, {
+      threadId: 't1',
+    });
+    listeners['notification']({
+      method: 'turn/completed',
+      params: {
+        threadId: 't1',
+        turn: {
+          id: 'turn',
+          status: 'completed',
+          items: [{ text: 'private output' }],
+        },
+      },
+    });
+    expect(mockServer.emit).toHaveBeenCalledWith(
+      'conversation.work.completed',
+      { threadId: 't1', turnId: 'turn' },
+    );
+    expect(mockServer.emit).not.toHaveBeenCalledWith(
+      'codex.notification',
+      expect.anything(),
+    );
+  });
+
+  it('does not announce failed, interrupted or unauthorized completions', () => {
+    for (const status of ['failed', 'interrupted']) {
+      listeners['notification']({
+        method: 'turn/completed',
+        params: { threadId: 't1', turn: { id: 'turn', status } },
+      });
+    }
+    expect(
+      mockServer.emit.mock.calls.filter(
+        ([event]) => event === 'conversation.work.completed',
+      ),
+    ).toHaveLength(0);
+    vi.spyOn(identities, 'canReadThread').mockReturnValue(false);
+    listeners['notification']({
+      method: 'turn/completed',
+      params: { threadId: 't1', turn: { id: 'turn', status: 'completed' } },
+    });
+    expect(
+      mockServer.emit.mock.calls.filter(
+        ([event]) => event === 'conversation.work.completed',
+      ),
+    ).toHaveLength(0);
   });
 
   it('removes misalignment steering before emitting an error to clients', () => {

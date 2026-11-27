@@ -1,3 +1,4 @@
+import { useAgentCompletionStore } from '@/stores/agent-completion-store';
 /**
  * Hook that connects socket.io events to multi-thread Zustand state.
  * Delegates Codex notifications to the dispatcher with a mutable routed thread id.
@@ -146,6 +147,7 @@ export function useCodexSocket(enabled = true) {
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     const handleAccessRevoked = () => {
+      useAgentCompletionStore.getState().clear();
       void queryClient.cancelQueries();
       queryClient.clear();
       // Recreate every in-memory view, including editors and document previews.
@@ -549,6 +551,19 @@ export function useCodexSocket(enabled = true) {
      */
     const handlePendingChanged = refreshPending;
 
+    const handleWorkCompleted = (value: unknown) => {
+      if (!value || typeof value !== 'object') return;
+      const { threadId, turnId } = value as Record<string, unknown>;
+      if (
+        typeof threadId !== 'string' ||
+        !threadId ||
+        typeof turnId !== 'string' ||
+        !turnId
+      )
+        return;
+      useAgentCompletionStore.getState().complete(threadId, turnId);
+    };
+    socket.on('conversation.work.completed', handleWorkCompleted);
     socket.on('conversation.overview.changed', handleOverviewChanged);
     socket.on('conversation.pending.changed', handlePendingChanged);
 
@@ -582,6 +597,8 @@ export function useCodexSocket(enabled = true) {
       socket.off('codex.serverRequest', handleCodexServerRequest);
       socket.off('codex.serverRequestFailed', ingestRequestFailure);
       socket.off('conversation.pending.resolved', handlePendingResolved);
+      socket.off('conversation.work.completed', handleWorkCompleted);
+      useAgentCompletionStore.getState().clear();
       socket.off('conversation.overview.changed', handleOverviewChanged);
       socket.off('conversation.pending.changed', handlePendingChanged);
     };

@@ -308,6 +308,20 @@ export class ThreadsGateway
     const projected = projectNotificationForClient(notification);
 
     if (threadId) {
+      if (
+        notification.method === 'turn/completed' &&
+        notification.params.turn.status === 'completed'
+      ) {
+        // Minimal background signal, authorized at delivery even without a room.
+        this.emitAuthorized(
+          'conversation.work.completed',
+          {
+            threadId,
+            turnId: notification.params.turn.id,
+          },
+          threadId,
+        );
+      }
       this.emitAuthorized('codex.notification', projected, threadId, true);
     } else {
       // Broadcast non-thread-scoped notifications to all connected clients

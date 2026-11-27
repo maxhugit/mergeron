@@ -4,6 +4,17 @@ La cloche, à gauche du compte, ouvre un panneau global à droite. L’en-tête 
 
 Les événements signalés sont les échecs d’agents, les demandes d’approbation, les questions nécessitant une réponse et les erreurs affichées dans les conversations et les notifications rouges de l’interface. Les erreurs de l’interface sont personnelles ; les événements d’agents sont distribués aux personnes ayant accès au projet et à la conversation au moment de l’événement. Les fins de travail réussies ne créent pas de notification dans ce centre ; les anciennes notifications de ce type sont également exclues de la liste et du compteur non lu. L’historique est indépendant des abonnements Web Push.
 
+Dans la liste des agents, une petite coche verte signale un travail terminé avec
+succès pendant la session ouverte du navigateur, y compris en arrière-plan.
+Cliquer sur l’agent efface son indicateur (et ceux de ses branches regroupées).
+Une nouvelle fin de travail le réaffiche ; un événement répété ne le réactive pas.
+Ce repère reste sur la ligne du nom, sans augmenter sa hauteur. Il ne crée pas de
+notification et ne remplace pas les indicateurs de travail en cours ou de demande
+d’intervention. Il n’est pas conservé après rechargement ou fermeture de session.
+Le serveur vérifie les droits actuels avant d’émettre ce signal minimal, sans
+texte de conversation. Les erreurs et interruptions ne déclenchent pas de coche.
+
+
 La liste et les groupes de projets suivent l’ordre du plus récent au plus ancien. Les filtres Toutes, Non lues et Lues portent sur la liste. La cloche affiche le total non lu accessible, indépendamment du filtre. Le regroupement utilise l’identifiant du projet : deux projets portant le même nom restent distincts. Les listes sont paginées par 100 notifications avec un bouton pour charger les plus anciennes.
 
 Cliquer sur une notification la marque comme lue puis ouvre son agent ou son projet ; l’enveloppe permet aussi de la marquer comme lue/non lue sans naviguer. Lire ne répond pas aux questions et n’autorise jamais une action. Une ancienne demande peut avoir déjà été traitée dans sa conversation.

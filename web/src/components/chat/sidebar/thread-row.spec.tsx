@@ -97,3 +97,24 @@ it('keeps the agent icon then task icon while preserving activity indicators', (
       .querySelector('.lucide-clipboard-check'),
   ).not.toBeInTheDocument();
 });
+
+it('shows a compact completion icon without replacing attention or running indicators', () => {
+  const view = (activity: Partial<ComponentProps<typeof ThreadRow>>) => (
+    <DragDropProvider>
+      <ThreadRow {...props} workCompleted {...activity} />
+    </DragDropProvider>
+  );
+  const rendered = render(view({}));
+  expect(screen.getByRole('img', { name: /Work completed/ })).toBeVisible();
+  for (const activity of [
+    { running: true },
+    { pendingApproval: true },
+    { waitingOnUserInput: true },
+    { workCompleted: false },
+  ]) {
+    rendered.rerender(view(activity));
+    expect(
+      screen.queryByRole('img', { name: /Work completed/ }),
+    ).not.toBeInTheDocument();
+  }
+});

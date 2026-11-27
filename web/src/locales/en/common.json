@@ -1681,6 +1681,7 @@
   "gitDeliverablesTitle": "Git deliverables",
   "projectShortDescription": "Short description",
   "projectShortDescriptionHint": "Optional, multiple lines allowed · Maximum 1,000 characters.",
+  "agentWorkCompletedUnread": "Work completed · click to dismiss the indicator",
   "groupTechnicalActivities": "Group technical activities",
   "agentElapsedInterrupted": "Interrupted",
   "agentElapsedFailed": "Failed",

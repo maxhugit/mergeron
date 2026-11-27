@@ -1,3 +1,4 @@
+import { useAgentCompletionStore } from '@/stores/agent-completion-store';
 import { useSidebarPreferences } from '@/hooks/use-sidebar-preferences';
 import { forgetPresentations } from '@/lib/mockup-presentation';
 /**
@@ -130,6 +131,7 @@ export function ThreadSidebar() {
   const threadMode = useTimelineStore((s) => s.threadMode);
   const selectActivity = useMemo(() => createSidebarActivitySelector(), []);
   const activityByThread = useTimelineStore(selectActivity);
+  const completedAgents = useAgentCompletionStore((state) => state.unread);
   const subscribedThreadIds = useTimelineStore((s) => s.subscribedThreadIds);
   const setActiveThread = useTimelineStore((s) => s.setActiveThread);
   const clearThread = useTimelineStore((s) => s.clearThread);
@@ -933,8 +935,14 @@ export function ThreadSidebar() {
         pendingApproval={waitingOnApproval}
         pendingApprovalCount={pendingApprovalCount}
         waitingOnUserInput={waitingOnUserInput}
+        workCompleted={(row?.memberThreadIds ?? [thread.id]).some((id) =>
+          completedAgents.has(id),
+        )}
         hasBranchDescendants={Boolean(row?.hasBranchDescendants)}
         onOpen={() => {
+          useAgentCompletionStore
+            .getState()
+            .acknowledge(row?.memberThreadIds ?? [thread.id]);
           if (archived) void openArchivedThread(thread);
           else openLiveThread(thread);
         }}
