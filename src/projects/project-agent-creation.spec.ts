@@ -317,3 +317,20 @@ it('rejects a concurrent association for the same agent and releases its guard a
     service.associateAgent('p', 'new-agent', copyPath),
   ).resolves.toMatchObject({ workspacePath: copyPath });
 });
+
+it('rejects a reserved copy before starting a new native agent, including a subdirectory', async () => {
+  const copyPath = await addCopy();
+  claimAgentCopy(database.db, 'p', 'new-agent', 'copy');
+  await mkdir(join(copyPath, 'components'));
+  threads.startThread.mockClear();
+  const original = database.db.select().from(projectGitCopyOwners).all();
+  for (const selected of [copyPath, join(copyPath, 'components')]) {
+    await expect(service.createAgent('p', selected)).rejects.toThrow(
+      'GIT_COPY_OWNED',
+    );
+  }
+  expect(threads.startThread).not.toHaveBeenCalled();
+  expect(database.db.select().from(projectGitCopyOwners).all()).toEqual(
+    original,
+  );
+});

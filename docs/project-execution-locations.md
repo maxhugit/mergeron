@@ -15,6 +15,21 @@ locale explicite reste nécessaire. Les emplacements de projets différents ne
 sont pas interchangeables. Le dossier d’une tâche liée reste prioritaire sur le
 dossier par défaut de sa conversation, comme auparavant.
 
+## Création d’un nouvel agent
+
+Le choix initial propose les espaces locaux du projet, sans les copies Git
+existantes, y compris pour un agent utilisant un modèle local. Si seul l’espace
+local géré reste disponible, la création l’utilise directement et ne présente pas
+un sélecteur inutile. Les autres espaces locaux restent sélectionnables.
+Pour travailler depuis Git, créer l’agent puis préparer sa propre copie depuis
+**Sources → connexion Git → Préparer une copie de travail**. La réservation et
+le choix du dossier suivent le mécanisme existant, sans partager implicitement
+le dossier d’un autre agent.
+
+Le serveur refuse une copie déjà réservée avant de démarrer le nouvel agent,
+même si un ancien client envoie son chemin ou celui d’un sous-dossier. Le contrôle
+de réservation à l’association reste aussi actif pour couvrir les accès concurrents.
+
 ## Contrôles appliqués aux conversations existantes
 
 Les contrôles sont effectués à la création, à la reprise et avant chaque tour :

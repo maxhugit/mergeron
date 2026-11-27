@@ -712,7 +712,8 @@
             ],
             "paragraphs": [
               "Dans Capacités → Détails techniques, activez Regrouper les activités techniques pour réunir les opérations consécutives. Le groupe est fermé par défaut ; après ouverture, les opérations et commandes du terminal restent repliées, même en erreur. Cliquez sur chaque ligne pour consulter son contenu. Les demandes de confirmation restent visibles.",
-              "Une coche verte dans la liste indique qu’un agent a terminé son travail avec succès pendant la session ouverte. Cliquez sur l’agent pour l’effacer. Elle reste sur la ligne du nom, sans notification dans la cloche ; elle n’est pas conservée après rechargement ou fermeture de session."
+              "Une coche verte dans la liste indique qu’un agent a terminé son travail avec succès pendant la session ouverte. Cliquez sur l’agent pour l’effacer. Elle reste sur la ligne du nom, sans notification dans la cloche ; elle n’est pas conservée après rechargement ou fermeture de session.",
+              "À la création d’un agent, seuls les espaces locaux du projet sont proposés. Les copies Git existantes sont exclues, même pour un modèle local. Pour travailler sur Git, créez l’agent puis préparez sa propre copie depuis Sources, dans le menu de la connexion Git."
             ]
           },
           {
