@@ -194,7 +194,7 @@ it('keeps a retired question visible when its technical item would be hidden', (
   expect(document.querySelectorAll('details')).toHaveLength(0);
 });
 
-it('groups consecutive technical activity, preserves prose boundaries and leaves failures visible', async () => {
+it('groups consecutive activity including failures with children initially collapsed', async () => {
   const { useTechnicalGrouping } = await import('@/hooks/use-group-technical');
   useTechnicalGrouping.setState({ grouped: true });
   const entry = {
@@ -217,11 +217,16 @@ it('groups consecutive technical activity, preserves prose boundaries and leaves
   groups[0].open = true;
   fireEvent(groups[0], new Event('toggle'));
   expect(groups[0].querySelectorAll('[data-transcript-item]')).toHaveLength(2);
-  expect(
-    groups.every(
-      (group) => !group.querySelector('[data-transcript-item="failed"]'),
-    ),
-  ).toBe(true);
+  expect(groups[0].querySelector('details')?.open).toBe(false);
+  groups[1].open = true;
+  fireEvent(groups[1], new Event('toggle'));
+  expect(groups[1].querySelector('[data-transcript-item="failed"]')).toBeInTheDocument();
+  expect(Array.from(groups[1].querySelectorAll('details')).every((child) => !child.open)).toBe(true);
+  expect(screen.queryByText('technical log output')).not.toBeInTheDocument();
+  const child = groups[1].querySelector('details')!;
+  child.open = true;
+  fireEvent(child, new Event('toggle'));
+  expect(screen.getByText('technical log output')).toBeVisible();
   useTechnicalGrouping.setState({ grouped: false });
 });
 
@@ -270,4 +275,30 @@ it('does not repeat a command authorization in the continuation fragment', () =>
   expect(
     screen.queryByRole('button', { name: 'Approve operation' }),
   ).toBeNull();
+});
+
+
+it('keeps a running tool closed when it fails and allows manual reopening', async () => {
+  const { useTechnicalGrouping } = await import('@/hooks/use-group-technical');
+  useTechnicalGrouping.setState({ grouped: true });
+  const tool: TurnItem = {
+    type: 'mcpToolCall', itemId: 'tool', completed: false,
+    toolServer: 'test', toolName: 'read', toolArgs: '{}', content: 'tool output',
+  };
+  const entry = { kind: 'turn' as const, turnId: 'running', completed: false, items: [tool] };
+  const view = render(<TurnBlock entry={entry} />);
+  const group = view.container.querySelector('details')!;
+  expect(group.open).toBe(false);
+  group.open = true;
+  fireEvent(group, new Event('toggle'));
+  const header = screen.getByRole('button', { name: /test\/read/ });
+  expect(header).toHaveAttribute('aria-expanded', 'false');
+  view.rerender(<TurnBlock entry={{ ...entry, completed: true, items: [{ ...tool, completed: true, failed: true }] }} />);
+  expect(header).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByText('tool output')).not.toBeInTheDocument();
+  fireEvent.click(header);
+  expect(screen.getByText('tool output')).toBeVisible();
+  fireEvent.click(header);
+  expect(screen.queryByText('tool output')).not.toBeInTheDocument();
+  useTechnicalGrouping.setState({ grouped: false });
 });

@@ -1,6 +1,10 @@
 import { createContext, useContext } from 'react';
 import type { TurnItem } from '@/types/timeline';
 
+export const CollapsedTechnicalChildren = createContext(false);
+export const useCollapsedTechnicalChildren = () =>
+  useContext(CollapsedTechnicalChildren);
+
 export const ExpandedTechnicalDetails = createContext(false);
 export const useExpandedTechnicalDetails = () =>
   useContext(ExpandedTechnicalDetails);

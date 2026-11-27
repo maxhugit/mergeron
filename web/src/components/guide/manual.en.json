@@ -709,6 +709,9 @@
                 "label": "Show everything",
                 "effect": "Expand technical activity. This is a display preference, not a model or permission change."
               }
+            ],
+            "paragraphs": [
+              "In Chat controls → Technical details, enable Group technical activities to group consecutive operations. Groups start closed; opening a group leaves its operations and terminal commands collapsed, including failures. Click each row to inspect its content. Approval requests remain visible."
             ]
           },
           {

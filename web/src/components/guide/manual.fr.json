@@ -709,6 +709,9 @@
                 "label": "Tout afficher",
                 "effect": "Développe l’activité technique. Ce choix est visuel et ne change ni le modèle ni ses permissions."
               }
+            ],
+            "paragraphs": [
+              "Dans Capacités → Détails techniques, activez Regrouper les activités techniques pour réunir les opérations consécutives. Le groupe est fermé par défaut ; après ouverture, les opérations et commandes du terminal restent repliées, même en erreur. Cliquez sur chaque ligne pour consulter son contenu. Les demandes de confirmation restent visibles."
             ]
           },
           {

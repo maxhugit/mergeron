@@ -55,6 +55,7 @@ test.each([390, 1100])(
               durationMs: 154000,
               items: [
                 command('one'),
+                { type: 'mcpToolCall', itemId: 'failed-tool', completed: true, failed: true, toolServer: 'mergeron_internal', toolName: 'project_git_read', toolArgs: '{}', content: 'Private error details' },
                 {
                   type: 'fileChange',
                   itemId: 'patch',
@@ -86,14 +87,22 @@ test.each([390, 1100])(
     expect(clock.getBoundingClientRect().bottom).toBeLessThan(
       response.getBoundingClientRect().top,
     );
-    const first = screen.getByText('Activités techniques · 2 opérations');
+    const first = screen.getByText('Activités techniques · 3 opérations');
     const panel = first.closest('details')!;
     expect(panel.open).toBe(false);
     act(() => {
       panel.open = true;
       fireEvent(panel, new Event('toggle'));
     });
-    expect(panel.querySelectorAll('[data-transcript-item]')).toHaveLength(2);
+    expect(panel.querySelectorAll('[data-transcript-item]')).toHaveLength(3);
+    expect(panel.querySelector('details')?.open).toBe(false);
+    const tool = screen.getByRole('button', { name: /mergeron_internal\/project_git_read/ });
+    expect(tool).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Private error details')).not.toBeInTheDocument();
+    fireEvent.click(tool);
+    expect(screen.getByText('Private error details')).toBeVisible();
+    fireEvent.click(tool);
+    expect(tool).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByText('src/app.ts')).toBeVisible();
     expect(screen.getByText('Lecture')).toBeVisible();
     expect(screen.getByText('Création')).toBeVisible();

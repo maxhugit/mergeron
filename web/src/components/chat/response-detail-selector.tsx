@@ -8,6 +8,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { useGroupTechnical } from '@/hooks/use-group-technical';
 import { OptionRow } from './option-row';
 import { useTimelineStore } from '@/stores/timeline-store';
 import {
@@ -26,6 +27,7 @@ export function ResponseDetailSelector({
   disabled?: boolean;
 }) {
   const { t } = useTranslation();
+  const grouping = useGroupTechnical();
   const [open, setOpen] = useState(false);
   const threadId = useTimelineStore((state) => state.threadId);
   const client = useQueryClient();
@@ -94,6 +96,22 @@ export function ResponseDetailSelector({
               />
             ))}
           </fieldset>
+          <Button
+            variant="ghost"
+            size="sm"
+            role="switch"
+            aria-checked={grouping.grouped}
+            disabled={!grouping.ready || grouping.pending}
+            onClick={grouping.toggle}
+            className="h-auto w-full justify-start whitespace-normal border-t px-2 py-2 text-left text-xs"
+          >
+            {t('groupTechnicalActivities')}
+          </Button>
+          {grouping.error && (
+            <p role="alert" className="text-xs text-destructive">
+              {t('unableToSave')}
+            </p>
+          )}
         </PopoverContent>
       </Popover>
       {(query.isError ||

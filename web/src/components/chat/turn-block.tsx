@@ -355,7 +355,7 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
       Object.values(userInputRequests).some(
         (r) => r.turnId === entry.turnId && r.itemId === item.itemId,
       ) ||
-      isFailedTechnicalItem(item);
+      (isFailedTechnicalItem(item) && (!grouped || displayMode === 'hidden'));
     const technical = isTechnicalItem(item) && !needsAttention;
     if (displayMode === 'hidden' && technical) continue;
     const previous = displayGroups.at(-1);
@@ -431,6 +431,7 @@ export function TurnBlock({ entry, threadId: ownerThreadId }: Props) {
                 <TechnicalDetails
                   key={`${grouped}:${displayMode}:${group.items[0].itemId}`}
                   expanded={!grouped && displayMode === 'expanded'}
+                  collapseChildren={grouped}
                   label={
                     (grouped
                       ? t('technicalActivityGroup', {

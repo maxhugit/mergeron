@@ -11,6 +11,10 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { useTimelineStore } from '@/stores/timeline-store';
 import { ResponseDetailSelector } from './response-detail-selector';
 
+vi.mock('@/hooks/use-group-technical', () => ({
+  useGroupTechnical: () => ({ grouped: false, ready: true, toggle: vi.fn() }),
+}));
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -55,7 +59,8 @@ it('offers three modes, saves per agent and restores them after remounting', asy
   ).not.toBeInTheDocument();
   fireEvent.click(select);
   const dialog = screen.getByRole('dialog', { name: 'Technical details' });
-  expect(dialog.querySelectorAll('button')).toHaveLength(3);
+  expect(dialog.querySelectorAll('button')).toHaveLength(4);
+  expect(screen.getByRole('switch', { name: 'Group technical activities' })).toBeVisible();
   fireEvent.click(
     screen.getByRole('button', { name: 'Hide technical details' }),
   );
